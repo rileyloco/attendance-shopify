@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Test Page</title>
+    <style>
+        body {
+            background-color: #2a2a2a;
+            color: white;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .test-container {
+            background-color: #1a1a1a;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+            border: 2px solid #444;
+        }
+        .test-container h3 {
+            margin-top: 0;
+            color: #4CAF50;
+        }
+        img {
+            border: 2px solid red;
+            display: block;
+            margin: 10px 0;
+        }
+        .working {
+            border-color: #4CAF50;
+        }
+        .info {
+            background-color: #333;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Image Loading Test Page</h1>
+    
+    <div class="test-container">
+        <h3>Test 1: Your Logo from /logo.png</h3>
+        <img src="/logo.png" alt="Logo Test 1" height="40" id="test1">
+        <div class="info">
+            Status: <span id="status1">Loading...</span><br>
+            Path: /logo.png
+        </div>
+    </div>
+    
+    <div class="test-container">
+        <h3>Test 1b: Your test.png file</h3>
+        <img src="/logo4.png" alt="Test PNG" height="40" id="test1b">
+        <div class="info">
+            Status: <span id="status1b">Loading...</span><br>
+            Path: /test.png (the file you said you saved)
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h3>Test 2: Placeholder Image (Should Always Work)</h3>
+        <img src="https://placehold.co/150x40/FF6B6B/FFFFFF?text=LocoMojo" alt="Placeholder" height="40" class="working">
+        <div class="info">
+            This is a test image from placeholder.com - if this shows, your browser can load images.
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h3>Test 3: Data URL (White Rectangle)</h3>
+        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==" alt="Data URL Test" width="100" height="40" style="background-color: white;" class="working">
+        <div class="info">
+            This is a base64 encoded image - if this shows, data URLs work.
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h3>Test 4: SVG Logo Test</h3>
+        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='40'%3E%3Ctext x='10' y='30' fill='white' font-family='Arial' font-size='24'%3ELocoMojo%3C/text%3E%3C/svg%3E" alt="SVG Test" height="40" class="working">
+        <div class="info">
+            This is an inline SVG - if this shows, SVG images work.
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h3>Test 5: Different Paths</h3>
+        <img src="logo.png" alt="Relative path" height="40" id="test5a">
+        <div class="info">Path: logo.png (relative)</div>
+        
+        <img src="./logo.png" alt="Relative with dot" height="40" id="test5b">
+        <div class="info">Path: ./logo.png (relative with dot)</div>
+        
+        <img src="/public/logo.png" alt="Public folder path" height="40" id="test5c">
+        <div class="info">Path: /public/logo.png</div>
+    </div>
+
+    <div class="test-container">
+        <h3>File Requirements for Web Images:</h3>
+        <ul>
+            <li>Format: PNG, JPG, GIF, SVG, or WebP</li>
+            <li>Color Mode: RGB (not CMYK)</li>
+            <li>Resolution: 72-150 DPI is fine for web</li>
+            <li>File size: Under 1MB for logos</li>
+            <li>Transparency: PNG and SVG support transparency</li>
+            <li>Path: Must be exact (case-sensitive on some servers)</li>
+        </ul>
+    </div>
+
+    <div class="test-container">
+        <h3>Debugging Steps:</h3>
+        <ol>
+            <li>Open Browser DevTools (F12)</li>
+            <li>Go to Network tab</li>
+            <li>Refresh this page</li>
+            <li>Look for logo.png in the list</li>
+            <li>Check the Status Code (should be 200)</li>
+            <li>If it's 404, the file isn't in the right place</li>
+        </ol>
+    </div>
+
+    <script>
+        // Test if images loaded
+        function testImage(id, statusId) {
+            const img = document.getElementById(id);
+            const status = document.getElementById(statusId);
+            
+            img.onload = function() {
+                status.textContent = '✅ Loaded successfully!';
+                status.style.color = '#4CAF50';
+                img.classList.add('working');
+            };
+            
+            img.onerror = function() {
+                status.textContent = '❌ Failed to load';
+                status.style.color = '#f44336';
+            };
+        }
+
+        testImage('test1', 'status1');
+        testImage('test1b', 'status1b');
+        
+        // Additional path tests
+        document.getElementById('test5a').onerror = function() { this.style.borderColor = '#f44336'; };
+        document.getElementById('test5a').onload = function() { this.style.borderColor = '#4CAF50'; };
+        document.getElementById('test5b').onerror = function() { this.style.borderColor = '#f44336'; };
+        document.getElementById('test5b').onload = function() { this.style.borderColor = '#4CAF50'; };
+        document.getElementById('test5c').onerror = function() { this.style.borderColor = '#f44336'; };
+        document.getElementById('test5c').onload = function() { this.style.borderColor = '#4CAF50'; };
+
+        // Log current URL for debugging
+        console.log('Current page URL:', window.location.href);
+        console.log('Expected logo URL:', window.location.origin + '/logo.png');
+    </script>
+</body>
+</html>
