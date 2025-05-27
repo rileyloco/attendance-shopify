@@ -211,7 +211,7 @@ function Orders() {
           return;
         }
         else if (title.includes('platinum bundle')) {
-          handleBundle(order, item, ['Level 1', 'Level 2', 'Level 3'], roleClasses, soloClasses);
+          handleBundle(order, item, ['Level 1', 'Level 2', 'Level 3', 'Body Movement', 'Shines'], roleClasses, soloClasses);
           return;
         }
         else return; // Skip unknown classes
@@ -281,7 +281,7 @@ function Orders() {
       roleClasses[role].push(...levelClasses);
     }
     
-    // Add Body Movement/Shines to solo classes
+    // ALWAYS add Body Movement/Shines to solo classes (regardless of role)
     const solos = classNames.filter(c => ['Body Movement', 'Shines'].includes(c));
     soloClasses.push(...solos);
   }
@@ -292,9 +292,9 @@ function Orders() {
       const tableName = type === 'paid' ? 'paid_attendance' : 'free_attendance';
       setMessage(prev => prev + ` Updating ${type} attendance records...`);
       
-      // Filter orders by type
+      // Filter orders by type AND payment status
       const ordersToProcess = type === 'paid' 
-        ? parsedOrders.filter(o => !o.hasOwnProperty('class_date'))
+        ? parsedOrders.filter(o => !o.hasOwnProperty('class_date') && o.paid === true)
         : parsedOrders.filter(o => o.hasOwnProperty('class_date'));
       
       if (ordersToProcess.length === 0) {
