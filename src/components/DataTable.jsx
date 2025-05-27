@@ -24,11 +24,11 @@ export default function DataTable({ headers, rows }) {
     if (header === 'Paid' || header === 'Total' || header === 'Attended') return 'w-16';
     
     // Date/Time columns
-    if (header === 'Order Date') return 'w-28';
-    if (header === 'Check-in Time') return 'w-36'; // Slightly wider to prevent wrapping
+    if (header === 'Order Date' || header === 'Date') return 'w-32';
+    if (header === 'Check-in Time' || header === 'Time') return 'w-36'; // Slightly wider to prevent wrapping
     
     // Week columns - made wider to prevent header wrapping
-    if (header.startsWith('Week')) return 'w-20'; // Increased from w-16
+    if (header.startsWith('Week') || header.match(/^W\d$/)) return 'w-20'; // Increased from w-16
     
     // Other columns
     if (header === 'Email') return 'w-48';
@@ -70,7 +70,15 @@ export default function DataTable({ headers, rows }) {
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" style={{
+      scrollbarWidth: 'none',
+      msOverflowStyle: 'none'
+    }}>
+      <style jsx>{`
+        .overflow-x-auto::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
@@ -95,7 +103,7 @@ export default function DataTable({ headers, rows }) {
                     cursor: isSortable ? 'pointer' : 'default',
                     userSelect: 'none',
                     transition: 'all 0.3s ease',
-                    ...(headers[idx] === 'Attended' || headers[idx] === 'Paid' || headers[idx].startsWith('Week') ? { textAlign: 'center' } : {})
+                    ...(headers[idx] === 'Attended' || headers[idx] === 'Paid' || headers[idx].startsWith('Week') || headers[idx].match(/^W\d$/) ? { textAlign: 'center' } : {})
                   }}
                   onMouseEnter={(e) => {
                     if (isSortable) {
@@ -106,7 +114,7 @@ export default function DataTable({ headers, rows }) {
                     e.currentTarget.style.color = 'var(--text-muted)';
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: headers[idx] === 'Attended' || headers[idx] === 'Paid' || headers[idx].startsWith('Week') ? 'center' : 'flex-start' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: headers[idx] === 'Attended' || headers[idx] === 'Paid' || headers[idx].startsWith('Week') || headers[idx].match(/^W\d$/) ? 'center' : 'flex-start' }}>
                     {header}
                     {isSortable && (
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
@@ -119,13 +127,18 @@ export default function DataTable({ headers, rows }) {
             })}
           </tr>
         </thead>
-        <tbody>
+        <tbody style={{
+          transition: 'all 0.5s ease'
+        }}>
           {sortedRows.map((row, rowIdx) => (
             <tr 
               key={rowIdx} 
               style={{
                 transition: 'all 0.3s ease',
-                borderRadius: '12px'
+                borderRadius: '12px',
+                opacity: 0,
+                animation: 'fadeInRow 0.5s ease forwards',
+                animationDelay: `${rowIdx * 0.05}s`
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
@@ -151,7 +164,7 @@ export default function DataTable({ headers, rows }) {
                              headers[cellIdx] === 'Classes' ? '128px' :
                              headers[cellIdx] === 'Check-in Time' ? '144px' :
                              undefined,
-                    ...(headers[cellIdx].startsWith('Week') || headers[cellIdx] === 'Attended' || headers[cellIdx] === 'Paid' ? { textAlign: 'center' } : {})
+                    ...(headers[cellIdx].startsWith('Week') || headers[cellIdx].match(/^W\d$/) || headers[cellIdx] === 'Attended' || headers[cellIdx] === 'Paid' ? { textAlign: 'center' } : {})
                   }}
                   title={typeof cell === 'string' ? cell : undefined}
                 >
@@ -162,6 +175,22 @@ export default function DataTable({ headers, rows }) {
           ))}
         </tbody>
       </table>
+      
+      <style jsx>{`
+        .overflow-x-auto::-webkit-scrollbar {
+          display: none;
+        }
+        @keyframes fadeInRow {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }

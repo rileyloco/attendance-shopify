@@ -72,28 +72,44 @@ function NavBar() {
         height: '85px'
       }}>
         {/* Logo and Term Display */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <Link to="/" style={{
-            fontSize: '26px',
-            fontWeight: '800',
-            background: 'linear-gradient(135deg, var(--accent-warm) 0%, var(--accent-gold) 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-            textDecoration: 'none',
-            lineHeight: '1'
+            display: 'flex',
+            alignItems: 'center'
           }}>
-            LocoMojo
+            <img 
+              src="/logo7.png" 
+              alt="LocoMojo" 
+              style={{
+                height: '71.875px',
+                width: 'auto',
+                opacity: 0.9
+              }}
+            />
           </Link>
           
           {termDisplay && (
-            <div style={{ fontSize: '13px', marginTop: '2px' }}>
+            <div style={{ 
+              fontSize: '12px',
+              lineHeight: '1.3',
+              maxWidth: '150px'
+            }}>
               <span style={{ 
                 fontWeight: '500', 
-                color: 'var(--text-secondary)' 
+                color: 'var(--text-secondary)',
+                display: 'block'
               }}>
-                {termDisplay}
+                {termDisplay.split('(')[0].trim()}
               </span>
+              {termDisplay.includes('(') && (
+                <span style={{ 
+                  fontWeight: '400', 
+                  color: 'var(--text-muted)',
+                  fontSize: '11px'
+                }}>
+                  ({termDisplay.split('(')[1]}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -101,7 +117,7 @@ function NavBar() {
         {/* Center Navigation */}
         <div style={{
           display: 'flex',
-          gap: '3rem'
+          gap: '1rem'
         }}>
           {mainLinks.map(({ to, label }) => {
             const isActive = location.pathname === to;
@@ -115,34 +131,34 @@ function NavBar() {
                   fontWeight: '600',
                   transition: 'all 0.3s ease',
                   position: 'relative',
-                  fontSize: '16px'
+                  fontSize: '16px',
+                  padding: '0.75rem 1.5rem',
+                  borderRadius: '12px',
+                  background: isActive 
+                    ? 'linear-gradient(135deg, rgba(232, 93, 47, 0.15) 0%, rgba(245, 200, 66, 0.15) 100%)' 
+                    : 'transparent',
+                  border: isActive 
+                    ? '1px solid rgba(232, 93, 47, 0.3)' 
+                    : '1px solid transparent',
+                  backdropFilter: isActive ? 'blur(10px)' : 'none',
+                  WebkitBackdropFilter: isActive ? 'blur(10px)' : 'none'
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) {
                     e.currentTarget.style.color = 'var(--text-primary)';
+                    e.currentTarget.style.background = 'var(--glass-hover)';
+                    e.currentTarget.style.border = '1px solid var(--glass-border)';
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isActive) {
                     e.currentTarget.style.color = 'var(--text-secondary)';
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.border = '1px solid transparent';
                   }
                 }}
               >
                 {label}
-                {isActive && (
-                  <span style={{
-                    content: '""',
-                    position: 'absolute',
-                    bottom: '-10px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: '6px',
-                    height: '6px',
-                    background: 'var(--accent-warm)',
-                    borderRadius: '50%',
-                    boxShadow: '0 0 15px var(--accent-warm)'
-                  }} />
-                )}
               </Link>
             );
           })}

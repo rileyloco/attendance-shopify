@@ -312,6 +312,10 @@ function Kiosk() {
               placeholder="Start typing your name..."
               value={searchName}
               onChange={handleNameChange}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck="false"
               style={{
                 width: '100%',
                 padding: '1.25rem 1.5rem',
@@ -380,17 +384,7 @@ function Kiosk() {
             )}
           </div>
 
-          {/* Loading indicator */}
-          {loadingClasses && (
-            <div style={{
-              textAlign: 'center',
-              color: 'var(--text-secondary)',
-              fontSize: '0.95rem',
-              marginBottom: '1rem'
-            }}>
-              Loading your classes...
-            </div>
-          )}
+
 
           {/* Class Selection with fade transition */}
           <div style={{

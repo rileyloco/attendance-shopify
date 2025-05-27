@@ -49,8 +49,11 @@ function Attendance() {
       if (selectedClass === 'Free') {
         // Fetch free attendance
         const selectedDate = freeClassDates[selectedFreeDate].date;
-        // Format as YYYY-MM-DD for database query
-        const dateStr = selectedDate.toISOString().split('T')[0];
+        // Format as YYYY-MM-DD for database query using local date
+        const year = selectedDate.getFullYear();
+        const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+        const day = String(selectedDate.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
         
         console.log('Fetching free attendance for date:', dateStr);
         
@@ -318,12 +321,12 @@ function Attendance() {
     }
   }
 
-  // Prepare table data
+  // Prepare table data - Use W1, W2, etc. instead of "Week 1" to prevent wrapping
   const headers = search.length >= 2
     ? ['Name', 'Class', 'Role', 'Attendance', 'Notes']
     : selectedClass === 'Free' 
       ? ['Name', 'Role', 'Attended', 'Notes']
-      : ['Name', 'Role', 'Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Notes'];
+      : ['Name', 'Role', 'W1', 'W2', 'W3', 'W4', 'W5', 'Notes'];
   
   const rows = attendanceData.map(row => {
     const name = row.customer 
@@ -458,20 +461,6 @@ function Attendance() {
 
   return (
     <div style={{ padding: '4rem 0' }}>
-      {/* Page Title */}
-      <h1 style={{
-        fontSize: '2.5rem',
-        fontWeight: '700',
-        marginBottom: '3rem',
-        textAlign: 'center',
-        background: 'linear-gradient(135deg, var(--accent-warm) 0%, var(--accent-gold) 100%)',
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-        backgroundClip: 'text'
-      }}>
-        Attendance
-      </h1>
-      
       {/* Search Bar */}
       <div style={{ marginBottom: '2rem' }}>
         <input
@@ -578,52 +567,29 @@ function Attendance() {
       )}
 
       {/* Table Section */}
-      {loading ? (
+      <div style={{
+        background: 'var(--glass-bg)',
+        backdropFilter: 'blur(25px)',
+        WebkitBackdropFilter: 'blur(25px)',
+        border: '1px solid var(--glass-border)',
+        borderRadius: '28px',
+        padding: '1.5rem 3rem 3rem 3rem',
+        position: 'relative',
+        overflow: 'hidden',
+        minHeight: '200px',
+        transition: 'all 0.5s ease'
+      }}>
         <div style={{
-          textAlign: 'center',
-          padding: '4rem',
-          color: 'var(--text-secondary)',
-          fontSize: '1.1rem'
-        }}>
-          Loading attendance data...
-        </div>
-      ) : rows.length > 0 ? (
-        <div style={{
-          background: 'var(--glass-bg)',
-          backdropFilter: 'blur(25px)',
-          WebkitBackdropFilter: 'blur(25px)',
-          border: '1px solid var(--glass-border)',
-          borderRadius: '28px',
-          padding: '3rem',
-          position: 'relative',
-          overflow: 'hidden'
-        }}>
-          <div style={{
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: '3px',
-            background: 'linear-gradient(90deg, var(--accent-warm), var(--accent-gold), var(--accent-coral), var(--accent-teal))'
-          }}></div>
-          <DataTable headers={headers} rows={rows} />
-        </div>
-      ) : (
-        <div style={{
-          textAlign: 'center',
-          padding: '4rem',
-          color: 'var(--text-secondary)',
-          fontSize: '1.1rem'
-        }}>
-          {search.length >= 2 
-            ? 'No attendance records found for this search.'
-            : selectedClass === 'Free' 
-              ? `No attendance records found for ${freeClassDates[selectedFreeDate].label}.`
-              : `No attendance records found for ${selectedClass}.`
-          }
-        </div>
-      )}
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '3px',
+          background: 'linear-gradient(90deg, var(--accent-warm), var(--accent-gold), var(--accent-coral), var(--accent-teal))'
+        }}></div>
+        <DataTable headers={headers} rows={rows} />
+      </div>
     </div>
   );
 }

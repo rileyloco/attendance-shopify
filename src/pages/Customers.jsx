@@ -102,20 +102,6 @@ function Customers() {
     <div style={{
       padding: '4rem 0'
     }}>
-      {/* Page Title */}
-      <h1 style={{
-        fontSize: '2.5rem',
-        fontWeight: '700',
-        marginBottom: '3rem',
-        textAlign: 'center',
-        background: 'linear-gradient(135deg, var(--accent-warm) 0%, var(--accent-gold) 100%)',
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-        backgroundClip: 'text'
-      }}>
-        Customers
-      </h1>
-      
       {/* Search and Upload Bar */}
       <div style={{
         display: 'flex',
@@ -151,7 +137,7 @@ function Customers() {
           }}
         />
         <label style={{
-          padding: '1rem 2rem',
+          padding: '1rem 1.5rem',
           background: 'linear-gradient(135deg, var(--accent-warm) 0%, var(--accent-gold) 100%)',
           color: 'white',
           borderRadius: '14px',
@@ -159,7 +145,10 @@ function Customers() {
           cursor: 'pointer',
           transition: 'all 0.3s ease',
           display: 'flex',
-          alignItems: 'center'
+          alignItems: 'center',
+          fontSize: '1rem',
+          lineHeight: '1',
+          height: 'auto'
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = 'translateY(-2px)';
@@ -180,46 +169,37 @@ function Customers() {
       </div>
       
       {/* Table Section */}
-      {filteredCustomers.length ? (
+      <div style={{
+        background: 'var(--glass-bg)',
+        backdropFilter: 'blur(25px)',
+        WebkitBackdropFilter: 'blur(25px)',
+        border: '1px solid var(--glass-border)',
+        borderRadius: '28px',
+        padding: '1.5rem 3rem 3rem 3rem',
+        position: 'relative',
+        overflow: 'hidden',
+        minHeight: '200px',
+        transition: 'all 0.5s ease'
+      }}>
         <div style={{
-          background: 'var(--glass-bg)',
-          backdropFilter: 'blur(25px)',
-          WebkitBackdropFilter: 'blur(25px)',
-          border: '1px solid var(--glass-border)',
-          borderRadius: '28px',
-          padding: '3rem',
-          position: 'relative',
-          overflow: 'hidden'
-        }}>
-          <div style={{
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: '3px',
-            background: 'linear-gradient(90deg, var(--accent-warm), var(--accent-gold), var(--accent-coral), var(--accent-teal))'
-          }}></div>
-          <DataTable
-            headers={['Customer ID', 'First Name', 'Last Name', 'Email']}
-            rows={filteredCustomers.map((c) => [
-              c.customer_id,
-              c.first_name || '-',
-              c.last_name || '-',
-              c.email || '-',
-            ])}
-          />
-        </div>
-      ) : (
-        <div style={{
-          textAlign: 'center',
-          padding: '4rem',
-          color: 'var(--text-secondary)',
-          fontSize: '1.1rem'
-        }}>
-          No customers found.
-        </div>
-      )}
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '3px',
+          background: 'linear-gradient(90deg, var(--accent-warm), var(--accent-gold), var(--accent-coral), var(--accent-teal))'
+        }}></div>
+        <DataTable
+          headers={['Customer ID', 'First Name', 'Last Name', 'Email']}
+          rows={filteredCustomers.map((c) => [
+            c.customer_id,
+            c.first_name || '-',
+            c.last_name || '-',
+            c.email || '-',
+          ])}
+        />
+      </div>
     </div>
   );
 }

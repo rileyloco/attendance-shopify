@@ -3,155 +3,242 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Test Page</title>
+    <title>Attendance Data Updater</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body {
-            background-color: #2a2a2a;
-            color: white;
             font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
             padding: 20px;
+            background: #1a1a2e;
+            color: white;
         }
-        .test-container {
-            background-color: #1a1a1a;
-            padding: 20px;
+        button {
+            background: #e85d2f;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            cursor: pointer;
             margin: 20px 0;
-            border-radius: 10px;
-            border: 2px solid #444;
         }
-        .test-container h3 {
-            margin-top: 0;
-            color: #4CAF50;
+        button:hover {
+            background: #d54520;
         }
-        img {
-            border: 2px solid red;
-            display: block;
-            margin: 10px 0;
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
         }
-        .working {
-            border-color: #4CAF50;
+        #status {
+            margin: 20px 0;
+            padding: 20px;
+            background: #2a2a3e;
+            border-radius: 8px;
+            max-height: 400px;
+            overflow-y: auto;
         }
-        .info {
-            background-color: #333;
-            padding: 10px;
-            border-radius: 5px;
-            margin: 10px 0;
-            font-size: 14px;
-        }
+        .success { color: #4ecdc4; }
+        .error { color: #ff6b6b; }
+        .warning { color: #f5c842; }
     </style>
 </head>
 <body>
-    <h1>Image Loading Test Page</h1>
+    <h1>Attendance Data Updater</h1>
+    <p>This will update the attendance records in your database.</p>
     
-    <div class="test-container">
-        <h3>Test 1: Your Logo from /logo.png</h3>
-        <img src="/logo.png" alt="Logo Test 1" height="40" id="test1">
-        <div class="info">
-            Status: <span id="status1">Loading...</span><br>
-            Path: /logo.png
-        </div>
+    <div>
+        <label>Supabase URL:</label><br>
+        <input type="text" id="supabaseUrl" placeholder="https://your-project.supabase.co" style="width: 400px; padding: 5px;">
+    </div>
+    <div style="margin-top: 10px;">
+        <label>Supabase Anon Key:</label><br>
+        <input type="text" id="supabaseKey" placeholder="your-anon-key" style="width: 400px; padding: 5px;">
     </div>
     
-    <div class="test-container">
-        <h3>Test 1b: Your test.png file</h3>
-        <img src="/logo4.png" alt="Test PNG" height="40" id="test1b">
-        <div class="info">
-            Status: <span id="status1b">Loading...</span><br>
-            Path: /test.png (the file you said you saved)
-        </div>
-    </div>
-
-    <div class="test-container">
-        <h3>Test 2: Placeholder Image (Should Always Work)</h3>
-        <img src="https://placehold.co/150x40/FF6B6B/FFFFFF?text=LocoMojo" alt="Placeholder" height="40" class="working">
-        <div class="info">
-            This is a test image from placeholder.com - if this shows, your browser can load images.
-        </div>
-    </div>
-
-    <div class="test-container">
-        <h3>Test 3: Data URL (White Rectangle)</h3>
-        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==" alt="Data URL Test" width="100" height="40" style="background-color: white;" class="working">
-        <div class="info">
-            This is a base64 encoded image - if this shows, data URLs work.
-        </div>
-    </div>
-
-    <div class="test-container">
-        <h3>Test 4: SVG Logo Test</h3>
-        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='40'%3E%3Ctext x='10' y='30' fill='white' font-family='Arial' font-size='24'%3ELocoMojo%3C/text%3E%3C/svg%3E" alt="SVG Test" height="40" class="working">
-        <div class="info">
-            This is an inline SVG - if this shows, SVG images work.
-        </div>
-    </div>
-
-    <div class="test-container">
-        <h3>Test 5: Different Paths</h3>
-        <img src="logo.png" alt="Relative path" height="40" id="test5a">
-        <div class="info">Path: logo.png (relative)</div>
-        
-        <img src="./logo.png" alt="Relative with dot" height="40" id="test5b">
-        <div class="info">Path: ./logo.png (relative with dot)</div>
-        
-        <img src="/public/logo.png" alt="Public folder path" height="40" id="test5c">
-        <div class="info">Path: /public/logo.png</div>
-    </div>
-
-    <div class="test-container">
-        <h3>File Requirements for Web Images:</h3>
-        <ul>
-            <li>Format: PNG, JPG, GIF, SVG, or WebP</li>
-            <li>Color Mode: RGB (not CMYK)</li>
-            <li>Resolution: 72-150 DPI is fine for web</li>
-            <li>File size: Under 1MB for logos</li>
-            <li>Transparency: PNG and SVG support transparency</li>
-            <li>Path: Must be exact (case-sensitive on some servers)</li>
-        </ul>
-    </div>
-
-    <div class="test-container">
-        <h3>Debugging Steps:</h3>
-        <ol>
-            <li>Open Browser DevTools (F12)</li>
-            <li>Go to Network tab</li>
-            <li>Refresh this page</li>
-            <li>Look for logo.png in the list</li>
-            <li>Check the Status Code (should be 200)</li>
-            <li>If it's 404, the file isn't in the right place</li>
-        </ol>
-    </div>
+    <button onclick="updateAttendance()" id="updateBtn">Update Attendance Records</button>
+    
+    <div id="status"></div>
 
     <script>
-        // Test if images loaded
-        function testImage(id, statusId) {
-            const img = document.getElementById(id);
-            const status = document.getElementById(statusId);
+        // Attendance data
+        const attendanceData = [
+            // Level 1
+            {email: 'amelia.rose.graham@gmail.com', class: 'Level 1', role: 'Follower', weeks: [true, false, true, false, false]},
+            {email: 'a.romaniuk4@gmail.com', class: 'Level 1', role: 'Leader', weeks: [false, true, true, false, false]},
+            {email: 'a.romaniuk4@gmail.com', class: 'Level 1', role: 'Follower', weeks: [true, true, false, false, false]},
+            {email: 'ashley_davies07@yahoo.com.au', class: 'Level 1', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'derekandbianca1@gmail.com', class: 'Level 1', role: 'Follower', weeks: [false, false, false, false, false]},
+            {email: 'info@thelabpersonaltraining.com', class: 'Level 1', role: 'Leader', weeks: [true, true, false, false, false]},
+            {email: 'egillespie_36@hotmail.com', class: 'Level 1', role: 'Follower', weeks: [true, true, false, false, false]},
+            {email: 'de_thornhill@hotmail.com', class: 'Level 1', role: 'Leader', weeks: [true, true, false, false, false]},
+            {email: 'borijani@gmail.com', class: 'Level 1', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'jvanvoren@hotmail.com', class: 'Level 1', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'landypoint@gmail.com', class: 'Level 1', role: 'Leader', weeks: [true, true, false, false, false]},
+            {email: 'kristiina.marquardt@gmail.com', class: 'Level 1', role: 'Follower', weeks: [false, false, false, false, false]},
+            {email: 'shenlucy63@gmail.com', class: 'Level 1', role: 'Follower', weeks: [false, false, false, false, false]},
+            {email: 'mkssemir@yahoo.com', class: 'Level 1', role: 'Leader', weeks: [true, true, false, false, false]},
+            {email: 'm_dalla_07@hotmail.com', class: 'Level 1', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'natesantinella@gmail.com', class: 'Level 1', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'chinwenwauchendu@gmail.com', class: 'Level 1', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'rodrigoalvarenga02@gmail.com', class: 'Level 1', role: 'Leader', weeks: [false, true, false, false, false]},
+            {email: 'sam970.sh@gmail.com', class: 'Level 1', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'strawberrypeachseb@gmail.com', class: 'Level 1', role: 'Leader', weeks: [false, false, false, false, false]},
+            {email: 'woday4@gmail.com', class: 'Level 1', role: 'Follower', weeks: [true, true, true, false, false]},
             
-            img.onload = function() {
-                status.textContent = '✅ Loaded successfully!';
-                status.style.color = '#4CAF50';
-                img.classList.add('working');
-            };
+            // Level 2
+            {email: 'alejoa.c@hotmail.com', class: 'Level 2', role: 'Leader', weeks: [true, false, false, false, false]},
+            {email: 'sowhuat@yahoo.com', class: 'Level 2', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'piotr.szul@gmail.com', class: 'Level 2', role: 'Leader', weeks: [false, true, true, false, false]},
+            {email: 'mike@maddocksmindset.com', class: 'Level 2', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'jvanvoren@hotmail.com', class: 'Level 2', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'jvanvoren@hotmail.com', class: 'Level 2', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'tsullivan-@hotmail.com', class: 'Level 2', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'emoeder@hotmail.com', class: 'Level 2', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'derekandbianca1@gmail.com', class: 'Level 2', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'hello@hannahberck.com', class: 'Level 2', role: 'Follower', weeks: [true, false, true, false, false]},
+            {email: 'emsellick@gmail.com', class: 'Level 2', role: 'Follower', weeks: [false, true, true, false, false]},
+            {email: 'kimajoyce88@gmail.com', class: 'Level 2', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'sangita.b@hotmail.com', class: 'Level 2', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'masuyosh@gmail.com', class: 'Level 2', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'masuyosh@gmail.com', class: 'Level 2', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'derekandbianca1@gmail.com', class: 'Level 2', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'kristiina.marquardt@gmail.com', class: 'Level 2', role: 'Follower', weeks: [true, true, false, false, false]},
+            {email: 'shenlucy63@gmail.com', class: 'Level 2', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'rodrigoalvarenga02@gmail.com', class: 'Level 2', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'strawberrypeachseb@gmail.com', class: 'Level 2', role: 'Leader', weeks: [true, false, false, false, false]},
+            {email: 'spmadush@gmail.com', class: 'Level 2', role: 'Leader', weeks: [false, true, true, false, false]},
             
-            img.onerror = function() {
-                status.textContent = '❌ Failed to load';
-                status.style.color = '#f44336';
-            };
-        }
-
-        testImage('test1', 'status1');
-        testImage('test1b', 'status1b');
+            // Level 3
+            {email: 'sowhuat@yahoo.com', class: 'Level 3', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'piotr.szul@gmail.com', class: 'Level 3', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'jurenas.antanas@gmail.com', class: 'Level 3', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'mike@maddocksmindset.com', class: 'Level 3', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'jvanvoren@hotmail.com', class: 'Level 3', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'ppmljy@gmail.com', class: 'Level 3', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'emoeder@hotmail.com', class: 'Level 3', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'dds-nariman@hotmail.com', class: 'Level 3', role: 'Follower', weeks: [false, false, true, false, false]},
+            {email: 'calem.pope@gmail.com', class: 'Level 3', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'derekandbianca1@gmail.com', class: 'Level 3', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'tsullivan-@hotmail.com', class: 'Level 3', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'kimajoyce88@gmail.com', class: 'Level 3', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'anna@zhelnin.com', class: 'Level 3', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'sangita.b@hotmail.com', class: 'Level 3', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'derekandbianca1@gmail.com', class: 'Level 3', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'kristiina.marquardt@gmail.com', class: 'Level 3', role: 'Follower', weeks: [true, true, false, false, false]},
+            {email: 'shenlucy63@gmail.com', class: 'Level 3', role: 'Follower', weeks: [true, true, true, false, false]},
+            {email: 'rodrigoalvarenga02@gmail.com', class: 'Level 3', role: 'Leader', weeks: [true, true, true, false, false]},
+            {email: 'strawberrypeachseb@gmail.com', class: 'Level 3', role: 'Leader', weeks: [true, false, true, false, false]},
+            
+            // Body Movement (no role)
+            {email: 'zara_9@hotmail.com', class: 'Body Movement', role: '', weeks: [true, true, true, false, false]},
+            {email: 'mcdonald.k.lauren@gmail.com', class: 'Body Movement', role: '', weeks: [false, true, false, false, false]},
+            {email: 'mike@maddocksmindset.com', class: 'Body Movement', role: '', weeks: [true, true, true, false, false]},
+            {email: 'a.solomkina@gmail.com', class: 'Body Movement', role: '', weeks: [true, true, false, false, false]},
+            {email: 'tsullivan-@hotmail.com', class: 'Body Movement', role: '', weeks: [true, true, true, false, false]},
+            {email: 'keni_257@hotmail.com', class: 'Body Movement', role: '', weeks: [true, true, true, false, false]},
+            {email: 'ppmljy@gmail.com', class: 'Body Movement', role: '', weeks: [true, true, true, false, false]},
+            {email: 'christine1_teng@hotmail.com', class: 'Body Movement', role: '', weeks: [true, true, false, false, false]},
+            {email: 'hello@hannahberck.com', class: 'Body Movement', role: '', weeks: [false, false, false, false, false]},
+            {email: 'emsellick@gmail.com', class: 'Body Movement', role: '', weeks: [true, true, false, false, false]},
+            {email: 'kimajoyce88@gmail.com', class: 'Body Movement', role: '', weeks: [true, true, true, false, false]},
+            {email: 'sangita.b@hotmail.com', class: 'Body Movement', role: '', weeks: [true, true, true, false, false]},
+            {email: 'shenlucy63@gmail.com', class: 'Body Movement', role: '', weeks: [true, true, true, false, false]},
+            {email: 'strawberrypeachseb@gmail.com', class: 'Body Movement', role: '', weeks: [true, false, true, false, false]},
+            {email: 'kristiina.marquardt@gmail.com', class: 'Body Movement', role: '', weeks: [true, true, true, false, false]},
+            {email: 'rodrigoalvarenga02@gmail.com', class: 'Body Movement', role: '', weeks: [true, true, false, false, false]},
+            {email: 'derekandbianca1@gmail.com', class: 'Body Movement', role: '', weeks: [true, true, true, false, false]},
+            {email: 'stephfiggins@hotmail.com.au', class: 'Body Movement', role: '', weeks: [true, true, true, false, false]},
+            
+            // Shines (no role)
+            {email: 'a.solomkina@gmail.com', class: 'Shines', role: '', weeks: [true, true, false, false, false]},
+            {email: 'derekandbianca1@gmail.com', class: 'Shines', role: '', weeks: [true, true, true, false, false]},
+            {email: 'kimajoyce88@gmail.com', class: 'Shines', role: '', weeks: [true, true, true, false, false]},
+            {email: 'kristiina.marquardt@gmail.com', class: 'Shines', role: '', weeks: [true, true, true, false, false]},
+            {email: 'shenlucy63@gmail.com', class: 'Shines', role: '', weeks: [true, true, true, false, false]},
+            {email: 'mike@maddocksmindset.com', class: 'Shines', role: '', weeks: [true, true, true, false, false]},
+            {email: 'piotr.szul@gmail.com', class: 'Shines', role: '', weeks: [false, true, true, false, false]},
+            {email: 'rodrigoalvarenga02@gmail.com', class: 'Shines', role: '', weeks: [true, true, false, false, false]},
+            {email: 'sangita.b@hotmail.com', class: 'Shines', role: '', weeks: [true, true, true, false, false]},
+            {email: 'strawberrypeachseb@gmail.com', class: 'Shines', role: '', weeks: [true, false, true, false, false]},
+            {email: 'zara_9@hotmail.com', class: 'Shines', role: '', weeks: [true, true, true, false, false]},
+            {email: 'stephfiggins@hotmail.com.au', class: 'Shines', role: '', weeks: [true, true, true, false, false]}
+        ];
         
-        // Additional path tests
-        document.getElementById('test5a').onerror = function() { this.style.borderColor = '#f44336'; };
-        document.getElementById('test5a').onload = function() { this.style.borderColor = '#4CAF50'; };
-        document.getElementById('test5b').onerror = function() { this.style.borderColor = '#f44336'; };
-        document.getElementById('test5b').onload = function() { this.style.borderColor = '#4CAF50'; };
-        document.getElementById('test5c').onerror = function() { this.style.borderColor = '#f44336'; };
-        document.getElementById('test5c').onload = function() { this.style.borderColor = '#4CAF50'; };
-
-        // Log current URL for debugging
-        console.log('Current page URL:', window.location.href);
-        console.log('Expected logo URL:', window.location.origin + '/logo.png');
+        async function updateAttendance() {
+            const url = document.getElementById('supabaseUrl').value;
+            const key = document.getElementById('supabaseKey').value;
+            
+            if (!url || !key) {
+                alert('Please enter your Supabase URL and Anon Key');
+                return;
+            }
+            
+            const supabase = supabaseJs.createClient(url, key);
+            const statusDiv = document.getElementById('status');
+            const button = document.getElementById('updateBtn');
+            
+            button.disabled = true;
+            statusDiv.innerHTML = '<p>Starting update...</p>';
+            
+            let updated = 0;
+            let errors = 0;
+            
+            for (const record of attendanceData) {
+                try {
+                    // Get customer ID
+                    const { data: customer, error: customerError } = await supabase
+                        .from('customers')
+                        .select('customer_id')
+                        .eq('email', record.email.toLowerCase())
+                        .single();
+                    
+                    if (customerError || !customer) {
+                        statusDiv.innerHTML += `<p class="error">❌ Customer not found: ${record.email}</p>`;
+                        errors++;
+                        continue;
+                    }
+                    
+                    // Update attendance record
+                    const { error: updateError } = await supabase
+                        .from('paid_attendance')
+                        .update({
+                            week_1: record.weeks[0],
+                            week_2: record.weeks[1],
+                            week_3: record.weeks[2],
+                            week_4: record.weeks[3],
+                            week_5: record.weeks[4]
+                        })
+                        .eq('customer_id', customer.customer_id)
+                        .eq('class_name', record.class)
+                        .eq('role', record.role);
+                    
+                    if (updateError) {
+                        statusDiv.innerHTML += `<p class="error">❌ Error updating ${record.email} in ${record.class}: ${updateError.message}</p>`;
+                        errors++;
+                    } else {
+                        statusDiv.innerHTML += `<p class="success">✓ Updated ${record.email} - ${record.class} ${record.role || '(no role)'}</p>`;
+                        updated++;
+                    }
+                    
+                } catch (err) {
+                    statusDiv.innerHTML += `<p class="error">❌ Unexpected error for ${record.email}: ${err.message}</p>`;
+                    errors++;
+                }
+                
+                // Scroll to bottom
+                statusDiv.scrollTop = statusDiv.scrollHeight;
+            }
+            
+            statusDiv.innerHTML += `<hr><p class="warning"><strong>Update Complete!</strong></p>`;
+            statusDiv.innerHTML += `<p class="success">✓ Successfully updated: ${updated} records</p>`;
+            statusDiv.innerHTML += `<p class="error">❌ Errors: ${errors} records</p>`;
+            statusDiv.innerHTML += `<p>Total processed: ${updated + errors} records</p>`;
+            
+            button.disabled = false;
+            statusDiv.scrollTop = statusDiv.scrollHeight;
+        }
     </script>
 </body>
 </html>

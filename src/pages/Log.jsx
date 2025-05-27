@@ -225,7 +225,25 @@ function Log() {
   // Custom DataTable wrapper with glass UI
   function LogDataTable({ headers, entries, isLogged = false }) {
     return (
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" style={{
+        scrollbarWidth: 'none',
+        msOverflowStyle: 'none'
+      }}>
+        <style jsx>{`
+          .overflow-x-auto::-webkit-scrollbar {
+            display: none;
+          }
+          @keyframes fadeInRow {
+            from {
+              opacity: 0;
+              transform: translateY(10px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+        `}</style>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
@@ -244,7 +262,7 @@ function Log() {
                     width: header === 'Name' ? '200px' :
                            header === 'Class' ? '160px' :
                            header === 'Role' ? '100px' :
-                           header === 'Check-in Time' ? '100px' :
+                           header === 'Time' ? '100px' :
                            header === 'Notes' ? '160px' : 'auto'
                   }}
                 >
@@ -253,8 +271,10 @@ function Log() {
               ))}
             </tr>
           </thead>
-          <tbody>
-            {entries.map((log) => {
+          <tbody style={{
+            transition: 'all 0.5s ease'
+          }}>
+            {entries.map((log, rowIdx) => {
               const isSelected = !isLogged && selectedRows.has(log.id);
               const isRecentlyLogged = isLogged && recentlyLogged.has(log.id);
               
@@ -354,20 +374,6 @@ function Log() {
 
   return (
     <div style={{ padding: '4rem 0' }}>
-      {/* Page Title */}
-      <h1 style={{
-        fontSize: '2.5rem',
-        fontWeight: '700',
-        marginBottom: '3rem',
-        textAlign: 'center',
-        background: 'linear-gradient(135deg, var(--accent-warm) 0%, var(--accent-gold) 100%)',
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-        backgroundClip: 'text'
-      }}>
-        Check-in Log
-      </h1>
-      
       {/* Search and Action Bar */}
       <div style={{
         display: 'flex',
@@ -403,39 +409,29 @@ function Log() {
             e.target.style.background = 'var(--glass-bg)';
           }}
         />
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <button
-            onClick={fetchLogs}
-            disabled={loading}
-            style={{
-              padding: '1rem 2rem',
-              background: 'var(--glass-bg)',
-              border: '1px solid var(--glass-border)',
-              color: 'var(--text-primary)',
-              borderRadius: '14px',
-              fontWeight: '600',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              transition: 'all 0.3s ease',
-              backdropFilter: 'blur(20px)',
-              WebkitBackdropFilter: 'blur(20px)',
-              opacity: loading ? 0.7 : 1
-            }}
-            onMouseEnter={(e) => {
-              if (!loading) {
-                e.currentTarget.style.background = 'var(--glass-hover)';
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 8px 25px rgba(232, 93, 47, 0.2)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--glass-bg)';
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}
-          >
-            {loading ? 'Loading...' : 'Refresh'}
-          </button>
-        </div>
+        <button
+          onClick={fetchLogs}
+          style={{
+            padding: '1rem 1.5rem',
+            background: 'linear-gradient(135deg, var(--accent-warm) 0%, var(--accent-gold) 100%)',
+            color: 'white',
+            borderRadius: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            transition: 'all 0.3s ease',
+            border: 'none'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 15px 35px rgba(232, 93, 47, 0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = 'none';
+          }}
+        >
+          Refresh
+        </button>
       </div>
       
       {/* Message Display */}
@@ -514,40 +510,33 @@ function Log() {
             Log Selected ({selectedRows.size})
           </button>
         </div>
-        {unloggedEntries.length > 0 ? (
+        <div style={{
+          background: 'var(--glass-bg)',
+          backdropFilter: 'blur(25px)',
+          WebkitBackdropFilter: 'blur(25px)',
+          border: '1px solid var(--glass-border)',
+          borderRadius: '28px',
+          padding: '1.5rem 3rem 3rem 3rem',
+          position: 'relative',
+          overflow: 'hidden',
+          minHeight: '200px',
+          transition: 'all 0.5s ease'
+        }}>
           <div style={{
-            background: 'var(--glass-bg)',
-            backdropFilter: 'blur(25px)',
-            WebkitBackdropFilter: 'blur(25px)',
-            border: '1px solid var(--glass-border)',
-            borderRadius: '28px',
-            padding: '2rem',
-            position: 'relative',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              content: '""',
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: '3px',
-              background: 'linear-gradient(90deg, var(--accent-warm), var(--accent-gold), var(--accent-coral), var(--accent-teal))'
-            }}></div>
-            <LogDataTable 
-              headers={['Name', 'Class', 'Role', 'Check-in Time', 'Notes']} 
-              entries={unloggedEntries}
-              isLogged={false}
-            />
-          </div>
-        ) : (
-          <p style={{
-            color: 'var(--text-secondary)',
-            fontStyle: 'italic'
-          }}>
-            No unlogged check-ins
-          </p>
-        )}
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '3px',
+            background: 'linear-gradient(90deg, var(--accent-warm), var(--accent-gold), var(--accent-coral), var(--accent-teal))'
+          }}></div>
+          <LogDataTable 
+            headers={['Name', 'Class', 'Role', 'Time', 'Notes']} 
+            entries={unloggedEntries}
+            isLogged={false}
+          />
+        </div>
       </div>
       
       {/* Logged entries */}
@@ -563,40 +552,33 @@ function Log() {
         }}>
           Logged Check-ins ({loggedEntries.length})
         </h2>
-        {loggedEntries.length > 0 ? (
+        <div style={{
+          background: 'var(--glass-bg)',
+          backdropFilter: 'blur(25px)',
+          WebkitBackdropFilter: 'blur(25px)',
+          border: '1px solid var(--glass-border)',
+          borderRadius: '28px',
+          padding: '1.5rem 3rem 3rem 3rem',
+          position: 'relative',
+          overflow: 'hidden',
+          minHeight: '200px',
+          transition: 'all 0.5s ease'
+        }}>
           <div style={{
-            background: 'var(--glass-bg)',
-            backdropFilter: 'blur(25px)',
-            WebkitBackdropFilter: 'blur(25px)',
-            border: '1px solid var(--glass-border)',
-            borderRadius: '28px',
-            padding: '3rem',
-            position: 'relative',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              content: '""',
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: '3px',
-              background: 'linear-gradient(90deg, var(--success), var(--accent-teal), var(--accent-gold))'
-            }}></div>
-            <LogDataTable 
-              headers={['Name', 'Class', 'Role', 'Check-in Time', 'Notes']} 
-              entries={loggedEntries}
-              isLogged={true}
-            />
-          </div>
-        ) : (
-          <p style={{
-            color: 'var(--text-secondary)',
-            fontStyle: 'italic'
-          }}>
-            No logged check-ins
-          </p>
-        )}
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '3px',
+            background: 'linear-gradient(90deg, var(--success), var(--accent-teal), var(--accent-gold))'
+          }}></div>
+          <LogDataTable 
+            headers={['Name', 'Class', 'Role', 'Time', 'Notes']} 
+            entries={loggedEntries}
+            isLogged={true}
+          />
+        </div>
       </div>
     </div>
   );

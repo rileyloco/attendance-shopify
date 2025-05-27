@@ -2,13 +2,14 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
+
 function Console() {
   const [term, setTerm] = useState('2');
   const [block, setBlock] = useState('A');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteType, setDeleteType] = useState(''); // 'attendance' or 'log'
+  const [deleteType, setDeleteType] = useState(''); // 'attendance', 'free_attendance', or 'log'
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
@@ -270,6 +271,38 @@ function Console() {
    }
  }
 
+ // Delete free attendance
+ async function deleteFreeAttendance() {
+   setLoading(true);
+   setMessage('Deleting free attendance...');
+   
+   try {
+     // Get count first for feedback
+     const { count } = await supabase
+       .from('free_attendance')
+       .select('*', { count: 'exact', head: true });
+
+     // Delete all free attendance entries
+     const { error } = await supabase
+       .from('free_attendance')
+       .delete()
+       .gte('id', 0); // Delete all rows
+
+     if (error) {
+       console.error('Error deleting free attendance:', error);
+       setMessage('Failed to delete free attendance entries');
+     } else {
+       setMessage(`Successfully deleted ${count || 0} free attendance entries`);
+     }
+   } catch (err) {
+     console.error('Delete error:', err);
+     setMessage('Failed to delete free attendance data');
+   } finally {
+     setLoading(false);
+     hideConfirmationModal();
+   }
+ }
+
  // Delete log entries
  async function deleteLogEntries() {
    setLoading(true);
@@ -324,6 +357,8 @@ function Console() {
  function handleDeleteConfirm() {
    if (deleteType === 'attendance') {
      deletePaidAttendance();
+   } else if (deleteType === 'free_attendance') {
+     deleteFreeAttendance();
    } else if (deleteType === 'log') {
      deleteLogEntries();
    }
@@ -331,20 +366,6 @@ function Console() {
 
  return (
    <div style={{ padding: '4rem 0' }}>
-     {/* Page Title */}
-     <h1 style={{
-       fontSize: '2.5rem',
-       fontWeight: '700',
-       marginBottom: '3rem',
-       textAlign: 'center',
-       background: 'linear-gradient(135deg, var(--accent-warm) 0%, var(--accent-gold) 100%)',
-       WebkitBackgroundClip: 'text',
-       WebkitTextFillColor: 'transparent',
-       backgroundClip: 'text'
-     }}>
-       Console
-     </h1>
-     
      {/* Term Settings Card */}
      <div style={{
        background: 'var(--glass-bg)',
@@ -691,6 +712,36 @@ function Console() {
            >
              Delete Paid Attendance
            </button>
+           
+           <button
+             onClick={() => showConfirmationModal('free_attendance')}
+             disabled={loading}
+             style={{
+               padding: '1rem',
+               background: 'rgba(232, 93, 47, 0.2)',
+               color: 'var(--accent-warm)',
+               borderRadius: '12px',
+               fontWeight: '600',
+               cursor: loading ? 'not-allowed' : 'pointer',
+               transition: 'all 0.3s ease',
+               border: '1px solid rgba(232, 93, 47, 0.4)',
+               opacity: loading ? 0.7 : 1,
+               backdropFilter: 'blur(20px)',
+               WebkitBackdropFilter: 'blur(20px)'
+             }}
+             onMouseEnter={(e) => {
+               if (!loading) {
+                 e.currentTarget.style.transform = 'translateY(-2px)';
+                 e.currentTarget.style.background = 'rgba(232, 93, 47, 0.3)';
+               }
+             }}
+             onMouseLeave={(e) => {
+               e.currentTarget.style.transform = 'translateY(0)';
+               e.currentTarget.style.background = 'rgba(232, 93, 47, 0.2)';
+             }}
+           >
+             Delete Free Attendance
+           </button>
          </div>
        </div>
 
@@ -858,7 +909,9 @@ function Console() {
            WebkitTextFillColor: 'transparent',
            backgroundClip: 'text'
          }}>
-           {deleteType === 'attendance' ? 'Delete Paid Attendance?' : 'Delete All Logs?'}
+           {deleteType === 'attendance' ? 'Delete Paid Attendance?' : 
+            deleteType === 'free_attendance' ? 'Delete Free Attendance?' : 
+            'Delete All Logs?'}
          </h2>
          
          <p style={{ 
@@ -869,6 +922,8 @@ function Console() {
          }}>
            {deleteType === 'attendance' 
              ? `Are you sure you want to delete paid attendance for Term ${term} Block ${block}? This can't be undone!`
+             : deleteType === 'free_attendance'
+             ? `Are you sure you want to delete all free attendance records? This can't be undone!`
              : `Are you sure you want to delete all log entries? This can't be undone!`
            }
          </p>

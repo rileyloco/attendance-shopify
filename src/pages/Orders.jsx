@@ -166,8 +166,10 @@ function Orders() {
               paid: false,
               notes: order.note || ''
             };
-            console.log('Creating free order:', freeOrder);
+            console.log('Creating free order for customer', order.customer?.id, 'on date', classDate);
             freeClasses.push(freeOrder);
+          } else {
+            console.log('Failed to parse date from free class variant:', item.variant_title);
           }
           return;
         }
@@ -175,15 +177,33 @@ function Orders() {
         // Skip one class pass
         if (title.includes('one class pass')) return;
         
+        // STRICT TERM 2 FILTERING
         // Skip if not a term class
         if (!variant.includes('term')) return;
         
-        // Extract class name for paid classes
+        // Skip if it's Term 1 or Term 3
+        if (variant.includes('term 1') || variant.includes('term 3')) {
+          console.log('Skipping non-Term 2 order:', variant);
+          return;
+        }
+        
+        // Skip if it's Term 2b
+        if (variant.includes('term 2b')) {
+          console.log('Skipping Term 2b order:', variant);
+          return;
+        }
+        
+        // Only accept Term 2 or Term 2a
+        if (!variant.includes('term 2')) {
+          console.log('Skipping non-Term 2 order:', variant);
+          return;
+        }
+        
+        // Extract class name for paid classes - NO LEVEL 4
         let className = '';
         if (title.includes('level 1')) className = 'Level 1';
         else if (title.includes('level 2')) className = 'Level 2';
         else if (title.includes('level 3')) className = 'Level 3';
-        else if (title.includes('level 4')) className = 'Level 4';
         else if (title.includes('body movement') && title.includes('open')) className = 'Body Movement';
         else if (title.includes('shines')) className = 'Shines';
         else if (title.includes('unlimited bundle')) {
@@ -211,36 +231,34 @@ function Orders() {
       });
       
       // Process paid classes
-      if (orderType === 'paid') {
-        // Create rows for each role group
-        Object.entries(roleClasses).forEach(([role, classes]) => {
-          results.push({
-            order_id: order.id,
-            customer_id: order.customer?.id || null,
-            order_date: order.created_at,
-            classes: classes,
-            role: role,
-            paid: order.financial_status === 'paid',
-            notes: order.note || ''
-          });
+      // Create rows for each role group
+      Object.entries(roleClasses).forEach(([role, classes]) => {
+        results.push({
+          order_id: order.id,
+          customer_id: order.customer?.id || null,
+          order_date: order.created_at,
+          classes: classes,
+          role: role,
+          paid: order.financial_status === 'paid',
+          notes: order.note || ''
         });
-        
-        // Create one row for all solo classes (Body Movement & Shines)
-        if (soloClasses.length > 0) {
-          results.push({
-            order_id: order.id,
-            customer_id: order.customer?.id || null,
-            order_date: order.created_at,
-            classes: soloClasses,
-            role: '',
-            paid: order.financial_status === 'paid',
-            notes: order.note || ''
-          });
-        }
-      } else {
-        // Return free classes for free orders
-        results.push(...freeClasses);
+      });
+      
+      // Create one row for all solo classes (Body Movement & Shines)
+      if (soloClasses.length > 0) {
+        results.push({
+          order_id: order.id,
+          customer_id: order.customer?.id || null,
+          order_date: order.created_at,
+          classes: soloClasses,
+          role: '',
+          paid: order.financial_status === 'paid',
+          notes: order.note || ''
+        });
       }
+      
+      // Add free classes
+      results.push(...freeClasses);
       
       allResults.push(...results);
     });
@@ -269,10 +287,20 @@ function Orders() {
   }
 
   // Update attendance table with new entries from orders
-  async function updateAttendanceFromOrders(parsedOrders, type = orderType) {
+  async function updateAttendanceFromOrders(parsedOrders, type) {
     try {
       const tableName = type === 'paid' ? 'paid_attendance' : 'free_attendance';
       setMessage(prev => prev + ` Updating ${type} attendance records...`);
+      
+      // Filter orders by type
+      const ordersToProcess = type === 'paid' 
+        ? parsedOrders.filter(o => !o.hasOwnProperty('class_date'))
+        : parsedOrders.filter(o => o.hasOwnProperty('class_date'));
+      
+      if (ordersToProcess.length === 0) {
+        console.log(`No ${type} orders to process for attendance`);
+        return;
+      }
       
       // Get existing attendance records to avoid duplicates
       const { data: existingAttendance, error: fetchError } = await supabase
@@ -286,7 +314,11 @@ function Orders() {
       
       console.log(`Found ${existingAttendance?.length || 0} existing ${type} attendance records`);
       if (type === 'free' && existingAttendance?.length > 0) {
-        console.log('Sample existing free attendance record:', existingAttendance[0]);
+        console.log('Sample existing free attendance records:', existingAttendance.slice(0, 5));
+        // Log the actual dates in the database
+        existingAttendance.slice(0, 5).forEach(record => {
+          console.log(`DB Record - Customer: ${record.customer_id}, Date: ${record.class_date}, Role: ${record.role}`);
+        });
       }
       
       // Create a Set of existing combinations
@@ -294,27 +326,29 @@ function Orders() {
         type === 'paid'
           ? existingAttendance.map(a => `${a.customer_id}-${a.class_name}-${a.role || ''}`)
           : existingAttendance.map(a => {
-              // Convert date to ensure consistent format
               const dateStr = typeof a.class_date === 'string' ? a.class_date : a.class_date.toISOString().split('T')[0];
               return `${a.customer_id}-${dateStr}-${a.role || ''}`;
             })
       );
       
-      console.log(`Existing keys sample:`, Array.from(existingKeys).slice(0, 5));
+      console.log(`Existing keys for ${type} attendance:`, Array.from(existingKeys).slice(0, 10));
       
       // Prepare new attendance records
       const newAttendanceRecords = [];
+      const seenKeys = new Set(); // Track keys we're about to insert
       
-      for (const order of parsedOrders) {
+      for (const order of ordersToProcess) {
         if (type === 'paid') {
           // Process each class in the order
           for (const className of order.classes) {
             const key = `${order.customer_id}-${className}-${order.role || ''}`;
             
-            // Skip if this combination already exists
-            if (existingKeys.has(key)) {
+            // Skip if this combination already exists in DB or in our batch
+            if (existingKeys.has(key) || seenKeys.has(key)) {
               continue;
             }
+            
+            seenKeys.add(key);
             
             // Create new attendance record
             newAttendanceRecords.push({
@@ -335,29 +369,31 @@ function Orders() {
           // Free attendance
           const key = `${order.customer_id}-${order.class_date}-${order.role || ''}`;
           
-          console.log('Checking key:', key, 'against existing keys');
+          console.log('Checking free attendance key:', key, 'against existing keys');
           
-          // Skip if this combination already exists
-          if (existingKeys.has(key)) {
-            console.log('Skipping duplicate:', key);
+          // Skip if this combination already exists in DB or in our batch
+          if (existingKeys.has(key) || seenKeys.has(key)) {
+            console.log('Skipping duplicate free attendance:', key);
             continue;
           }
           
-          // Create new free attendance record with YYYY-MM-DD format
+          seenKeys.add(key);
+          
+          // Create new free attendance record
           const newRecord = {
             customer_id: order.customer_id,
             role: order.role || '',
-            class_date: order.class_date, // Already in YYYY-MM-DD format from parseClassDate
+            class_date: order.class_date,
             attended: false
           };
-          console.log('Creating free attendance record:', newRecord);
+          console.log('Creating new free attendance record:', newRecord);
+          console.log('Order class_date type:', typeof order.class_date, 'value:', order.class_date);
           newAttendanceRecords.push(newRecord);
         }
       }
       
       if (newAttendanceRecords.length > 0) {
         console.log(`Inserting ${newAttendanceRecords.length} new ${type} attendance records`);
-        console.log('Sample records to insert:', newAttendanceRecords.slice(0, 3));
         
         // Insert without upsert - we already filtered duplicates
         const { error: insertError } = await supabase
@@ -366,14 +402,14 @@ function Orders() {
         
         if (insertError) {
           console.error(`Error inserting ${type} attendance records:`, insertError);
-          setMessage(prev => prev + ` Failed to update attendance: ${insertError.message}`);
+          setMessage(prev => prev + ` Failed to update ${type} attendance: ${insertError.message}`);
         } else {
           console.log(`Inserted ${type} attendance records successfully`);
-          setMessage(prev => prev + ` Updated attendance records.`);
+          setMessage(prev => prev + ` Updated ${newAttendanceRecords.length} ${type} attendance records.`);
         }
       } else {
         console.log(`No new ${type} attendance records to add`);
-        setMessage(prev => prev + ` Attendance records are up to date.`);
+        setMessage(prev => prev + ` ${type} attendance records are up to date.`);
       }
     } catch (err) {
       console.error(`Error updating ${type} attendance:`, err);
@@ -438,8 +474,6 @@ function Orders() {
             console.error('Error inserting paid orders:', insertPaidError);
           } else {
             console.log(`Successfully synced ${paidOrders.length} paid orders`);
-            // Update paid attendance
-            await updateAttendanceFromOrders(paidOrders, 'paid');
           }
         }
       }
@@ -447,6 +481,7 @@ function Orders() {
       // Process FREE orders
       const freeOrders = allParsedOrders.filter(o => o.hasOwnProperty('class_date'));
       console.log(`Parsed into ${freeOrders.length} free order records`);
+      console.log('Free orders details:', freeOrders); // Debug log
       
       if (freeOrders.length > 0) {
         setMessage(`Processing free orders...`);
@@ -469,11 +504,14 @@ function Orders() {
             console.error('Error inserting free orders:', insertFreeError);
           } else {
             console.log(`Successfully synced ${freeOrders.length} free orders`);
-            // Update free attendance
-            await updateAttendanceFromOrders(freeOrders, 'free');
           }
         }
       }
+      
+      // UPDATE BOTH ATTENDANCE TYPES REGARDLESS OF CURRENT VIEW
+      setMessage(`Updating attendance records...`);
+      await updateAttendanceFromOrders(allParsedOrders, 'paid');
+      await updateAttendanceFromOrders(allParsedOrders, 'free');
       
       setMessage(`Successfully synced ${paidOrders.length} paid orders and ${freeOrders.length} free orders from Shopify!`);
       
@@ -500,8 +538,8 @@ function Orders() {
 
   // Prepare table data
   const headers = orderType === 'paid' 
-    ? ['Order ID', 'Customer', 'Role', 'Classes', 'Order Date']
-    : ['Order ID', 'Customer', 'Role', 'Class', 'Class Date'];
+    ? ['Order ID', 'Customer', 'Role', 'Classes', 'Date']
+    : ['Order ID', 'Customer', 'Role', 'Class', 'Date'];
     
   const rows = filteredOrders.map((order) => {
     if (orderType === 'paid') {
@@ -536,20 +574,6 @@ function Orders() {
 
   return (
     <div style={{ padding: '4rem 0' }}>
-      {/* Page Title */}
-      <h1 style={{
-        fontSize: '2.5rem',
-        fontWeight: '700',
-        marginBottom: '3rem',
-        textAlign: 'center',
-        background: 'linear-gradient(135deg, var(--accent-warm) 0%, var(--accent-gold) 100%)',
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-        backgroundClip: 'text'
-      }}>
-        Orders
-      </h1>
-      
       {/* Search and Sync Bar */}
       <div style={{
         display: 'flex',
@@ -589,7 +613,7 @@ function Orders() {
           onClick={syncFromShopify}
           disabled={loading}
           style={{
-            padding: '1rem 2rem',
+            padding: '1rem 1.5rem',
             background: loading ? 'var(--glass-bg)' : 'linear-gradient(135deg, var(--accent-warm) 0%, var(--accent-gold) 100%)',
             color: loading ? 'var(--text-secondary)' : 'white',
             borderRadius: '14px',
@@ -667,38 +691,29 @@ function Orders() {
       )}
       
       {/* Table Section */}
-      {rows.length > 0 ? (
+      <div style={{
+        background: 'var(--glass-bg)',
+        backdropFilter: 'blur(25px)',
+        WebkitBackdropFilter: 'blur(25px)',
+        border: '1px solid var(--glass-border)',
+        borderRadius: '28px',
+        padding: '1.5rem 3rem 3rem 3rem',
+        position: 'relative',
+        overflow: 'hidden',
+        minHeight: '200px',
+        transition: 'all 0.5s ease'
+      }}>
         <div style={{
-          background: 'var(--glass-bg)',
-          backdropFilter: 'blur(25px)',
-          WebkitBackdropFilter: 'blur(25px)',
-          border: '1px solid var(--glass-border)',
-          borderRadius: '28px',
-          padding: '3rem',
-          position: 'relative',
-          overflow: 'hidden'
-        }}>
-          <div style={{
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: '3px',
-            background: 'linear-gradient(90deg, var(--accent-warm), var(--accent-gold), var(--accent-coral), var(--accent-teal))'
-          }}></div>
-          <DataTable headers={headers} rows={rows} />
-        </div>
-      ) : (
-        <div style={{
-          textAlign: 'center',
-          padding: '4rem',
-          color: 'var(--text-secondary)',
-          fontSize: '1.1rem'
-        }}>
-          No {orderType} orders found. Click "Sync from Shopify" to import orders.
-        </div>
-      )}
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '3px',
+          background: 'linear-gradient(90deg, var(--accent-warm), var(--accent-gold), var(--accent-coral), var(--accent-teal))'
+        }}></div>
+        <DataTable headers={headers} rows={rows} />
+      </div>
     </div>
   );
 }

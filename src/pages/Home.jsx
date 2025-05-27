@@ -145,12 +145,6 @@ function Home() {
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text'
               }}>{page.label}</div>
-              <div style={{
-                color: 'var(--text-secondary)',
-                fontWeight: '500',
-                fontSize: '0.95rem',
-                lineHeight: '1.4'
-              }}>{page.description}</div>
             </button>
           ) : (
             <Link
@@ -202,12 +196,6 @@ function Home() {
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text'
               }}>{page.label}</div>
-              <div style={{
-                color: 'var(--text-secondary)',
-                fontWeight: '500',
-                fontSize: '0.95rem',
-                lineHeight: '1.4'
-              }}>{page.description}</div>
             </Link>
           )
         ))}
