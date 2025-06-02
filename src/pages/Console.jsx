@@ -222,6 +222,334 @@ function Console() {
    }
  }
 
+ // Export enrollment analysis for Term 2b
+ async function exportEnrollmentAnalysis() {
+   setLoading(true);
+   setMessage('Analyzing Term 2b enrollment from Shopify orders...');
+   
+   try {
+     // Calculate date range (5 weeks before term start)
+     const startDate = new Date('2025-05-01'); // Term 2 start
+     startDate.setDate(startDate.getDate() - (5 * 7));
+     const sinceDate = startDate.toISOString();
+
+     // Fetch orders directly from Shopify
+     const response = await fetch('/.netlify/functions/shopify-orders', {
+       method: 'POST',
+       headers: {
+         'Content-Type': 'application/json'
+       },
+       body: JSON.stringify({ since: sinceDate })
+     });
+
+     if (!response.ok) {
+       throw new Error(`Failed to fetch orders: ${response.statusText}`);
+     }
+
+     const data = await response.json();
+     const shopifyOrders = data.orders || [];
+     
+     console.log(`Fetched ${shopifyOrders.length} orders from Shopify`);
+     setMessage(`Analyzing ${shopifyOrders.length} orders from Shopify...`);
+
+     // Get customer details from database
+     const { data: customersData, error: customersError } = await supabase
+       .from('customers')
+       .select('customer_id, first_name, last_name, email');
+
+     if (customersError) {
+       console.error('Error fetching customers:', customersError);
+       setMessage('Failed to fetch customer data');
+       setLoading(false);
+       return;
+     }
+
+     // Create customer lookup map
+     const customerMap = {};
+     customersData.forEach(customer => {
+       customerMap[customer.customer_id] = customer;
+     });
+
+     // Process orders to identify enrollments
+     const customerEnrollments = {};
+
+     shopifyOrders.forEach(order => {
+       if (!order.customer?.id) return;
+       
+       const customerId = order.customer.id;
+       const customerInfo = customerMap[customerId] || {
+         first_name: order.customer.first_name || '',
+         last_name: order.customer.last_name || '',
+         email: order.customer.email || ''
+       };
+
+       if (!customerEnrollments[customerId]) {
+         customerEnrollments[customerId] = {
+           customer_id: customerId,
+           name: `${customerInfo.first_name} ${customerInfo.last_name}`.trim() || 'Unknown',
+           email: customerInfo.email || order.customer.email || '',
+           orders: [],
+           enrollments_2a: [],
+           enrollments_2b: [],
+           has_platinum: false
+         };
+       }
+
+       // Process each line item in the order
+       order.line_items.forEach(item => {
+         const title = item.title.toLowerCase();
+         const variant = (item.variant_title || '').toLowerCase();
+         
+         // Skip free classes and one class passes
+         if (title.includes('free class') || title.includes('one class pass')) return;
+         
+         // Check if it's a term class
+         if (!variant.includes('term')) return;
+         
+         // Determine which term/block
+         let term = '';
+         let block = '';
+         
+         if (variant.includes('term 2b')) {
+           term = '2';
+           block = 'b';
+         } else if (variant.includes('term 2a')) {
+           term = '2';
+           block = 'a';
+         } else if (variant.includes('term 2') && !variant.includes('term 1') && !variant.includes('term 3')) {
+           // "Term 2" without specific block = both blocks
+           term = '2';
+           block = 'both';
+         } else {
+           // Skip other terms
+           return;
+         }
+
+         // Extract class and role
+         let className = '';
+         if (title.includes('level 1')) className = 'Level 1';
+         else if (title.includes('level 2')) className = 'Level 2';
+         else if (title.includes('level 3')) className = 'Level 3';
+         else if (title.includes('body movement') && title.includes('open')) className = 'Body Movement';
+         else if (title.includes('shines')) className = 'Shines';
+         else if (title.includes('unlimited bundle') || title.includes('platinum bundle')) {
+           // Bundles include all classes
+           customerEnrollments[customerId].has_platinum = true;
+           const allClasses = ['Level 1', 'Level 2', 'Level 3', 'Body Movement', 'Shines'];
+           
+           // Extract role
+           let role = '';
+           if (variant.includes('leader')) role = 'Leader';
+           else if (variant.includes('follower')) role = 'Follower';
+           
+           // Add all classes for this bundle
+           allClasses.forEach(cls => {
+             if (cls === 'Body Movement' || cls === 'Shines') {
+               // No role for these classes
+               addEnrollment(customerEnrollments[customerId], cls, 'No Role', block, order.id);
+             } else if (role) {
+               // Level classes need role
+               addEnrollment(customerEnrollments[customerId], cls, role, block, order.id);
+             }
+           });
+           return;
+         } else {
+           return; // Unknown class
+         }
+
+         // Extract role for non-bundle classes
+         let role = '';
+         if (className === 'Body Movement' || className === 'Shines') {
+           role = 'No Role';
+         } else {
+           if (variant.includes('leader')) role = 'Leader';
+           else if (variant.includes('follower')) role = 'Follower';
+           else return; // Level classes need a role
+         }
+
+         // Add enrollment
+         addEnrollment(customerEnrollments[customerId], className, role, block, order.id);
+       });
+
+       // Store order info
+       customerEnrollments[customerId].orders.push({
+         order_id: order.id,
+         order_date: order.created_at,
+         items: order.line_items
+       });
+     });
+
+     // Helper function to add enrollment
+     function addEnrollment(customer, className, role, block, orderId) {
+       const enrollment = { class: className, role: role, order_id: orderId };
+       
+       if (block === 'a') {
+         customer.enrollments_2a.push(enrollment);
+       } else if (block === 'b') {
+         customer.enrollments_2b.push(enrollment);
+       } else if (block === 'both') {
+         // Term 2 without specific block = enrolled in both
+         customer.enrollments_2a.push({...enrollment});
+         customer.enrollments_2b.push({...enrollment});
+       }
+     }
+
+     // Now create the export data
+     const enrolled2b = [];
+     const notEnrolled2b = [];
+     const allCurrent2bEnrollments = [];
+
+     Object.values(customerEnrollments).forEach(customer => {
+       // Skip if no Term 2 enrollments at all
+       if (customer.enrollments_2a.length === 0 && customer.enrollments_2b.length === 0) {
+         return;
+       }
+
+       // Create a set of 2b enrollments for easy lookup
+       const enrolled2bSet = new Set(
+         customer.enrollments_2b.map(e => `${e.class}-${e.role}`)
+       );
+
+       // Process each 2a enrollment
+       customer.enrollments_2a.forEach(enrollment => {
+         const key = `${enrollment.class}-${enrollment.role}`;
+         const orderDetails = customer.has_platinum ? 'Platinum/Unlimited Bundle' : enrollment.class;
+         
+         if (enrolled2bSet.has(key)) {
+           // They're enrolled in 2b
+           enrolled2b.push({
+             customer_id: customer.customer_id,
+             name: customer.name,
+             email: customer.email,
+             order_id: enrollment.order_id,
+             class: enrollment.class,
+             role: enrollment.role,
+             order_details: orderDetails,
+             notes: customer.has_platinum ? 'Bundle includes both blocks' : ''
+           });
+         } else {
+           // They're NOT enrolled in 2b for this class
+           // Check if they have other 2b enrollments
+           const other2bClasses = customer.enrollments_2b
+             .filter(e => e.class !== enrollment.class)
+             .map(e => e.class);
+           
+           notEnrolled2b.push({
+             customer_id: customer.customer_id,
+             name: customer.name,
+             email: customer.email,
+             order_id: enrollment.order_id,
+             class: enrollment.class,
+             role: enrollment.role,
+             order_details: orderDetails,
+             notes: other2bClasses.length > 0 ? 
+               `Has enrolled in other classes for 2b: ${[...new Set(other2bClasses)].join(', ')}` : ''
+           });
+         }
+       });
+
+       // Add all 2b enrollments to the complete list
+       customer.enrollments_2b.forEach(enrollment => {
+         const orderDetails = customer.has_platinum ? 'Platinum/Unlimited Bundle' : enrollment.class;
+         
+         allCurrent2bEnrollments.push({
+           customer_id: customer.customer_id,
+           name: customer.name,
+           email: customer.email,
+           order_id: enrollment.order_id,
+           class: enrollment.class,
+           role: enrollment.role,
+           order_details: orderDetails,
+           notes: ''
+         });
+       });
+     });
+
+     // Sort all three categories by class by default
+     enrolled2b.sort((a, b) => {
+       const classCompare = a.class.localeCompare(b.class);
+       if (classCompare !== 0) return classCompare;
+       return a.name.localeCompare(b.name);
+     });
+
+     notEnrolled2b.sort((a, b) => {
+       const classCompare = a.class.localeCompare(b.class);
+       if (classCompare !== 0) return classCompare;
+       return a.name.localeCompare(b.name);
+     });
+     
+     allCurrent2bEnrollments.sort((a, b) => {
+       const classCompare = a.class.localeCompare(b.class);
+       if (classCompare !== 0) return classCompare;
+       return a.name.localeCompare(b.name);
+     });
+
+     // Create CSV content
+     const headers = ['Customer ID', 'Name', 'Email', 'Order ID', 'Class', 'Role', 'Order Details', 'Notes', 'Category'];
+     
+     // Combine all three datasets with category labels
+     const allRows = [
+       ...enrolled2b.map(row => ({...row, category: 'Enrolled for 2b'})),
+       ...notEnrolled2b.map(row => ({...row, category: 'Not Enrolled for 2b'})),
+       ...allCurrent2bEnrollments.map(row => ({...row, category: 'All Current 2b Enrollments'}))
+     ];
+
+     // Convert to CSV format
+     const csvContent = [
+       headers.join(','),
+       ...allRows.map(row => {
+         // Escape values that contain commas or quotes
+         const values = [
+           row.customer_id,
+           `"${row.name.replace(/"/g, '""')}"`,
+           `"${row.email.replace(/"/g, '""')}"`,
+           row.order_id,
+           `"${row.class}"`,
+           `"${row.role}"`,
+           `"${row.order_details.replace(/"/g, '""')}"`,
+           `"${row.notes.replace(/"/g, '""')}"`,
+           `"${row.category}"`
+         ];
+         return values.join(',');
+       })
+     ].join('\n');
+
+     // Add summary at the top
+     const summaryRows = [
+       'Term 2b Enrollment Analysis',
+       `Exported: ${new Date().toLocaleString()}`,
+       '',
+       `Total Customers Analyzed: ${Object.keys(customerEnrollments).length}`,
+       `Unique Customers Enrolled in 2b: ${new Set(enrolled2b.map(r => r.customer_id)).size}`,
+       `Unique Customers NOT Enrolled in 2b: ${new Set(notEnrolled2b.map(r => r.customer_id)).size}`,
+       `Total 2b Enrollments (from 2a who enrolled): ${enrolled2b.length}`,
+       `Total Missing 2b Enrollments: ${notEnrolled2b.length}`,
+       `Total All Current 2b Enrollments: ${allCurrent2bEnrollments.length}`,
+       '',
+       ''
+     ];
+
+     const fullCsvContent = summaryRows.join('\n') + '\n' + csvContent;
+
+     // Create and download the CSV file
+     const filename = `enrollment_analysis_2b_${new Date().toISOString().split('T')[0]}.csv`;
+     const blob = new Blob([fullCsvContent], { type: 'text/csv;charset=utf-8;' });
+     const url = URL.createObjectURL(blob);
+     const a = document.createElement('a');
+     a.href = url;
+     a.download = filename;
+     a.click();
+     URL.revokeObjectURL(url);
+
+     setMessage(`Exported Term 2b enrollment analysis - ${enrolled2b.length} enrolled, ${notEnrolled2b.length} not enrolled`);
+   } catch (err) {
+     console.error('Export error:', err);
+     setMessage('Failed to export enrollment analysis');
+   } finally {
+     setLoading(false);
+   }
+ }
+
  // Delete paid attendance
  async function deletePaidAttendance() {
    setLoading(true);
@@ -681,6 +1009,36 @@ function Console() {
              }}
            >
              Export Attendance
+           </button>
+           
+           <button
+             onClick={exportEnrollmentAnalysis}
+             disabled={loading}
+             style={{
+               padding: '1rem',
+               background: 'rgba(78, 205, 196, 0.2)',
+               color: 'var(--success)',
+               borderRadius: '12px',
+               fontWeight: '600',
+               cursor: loading ? 'not-allowed' : 'pointer',
+               transition: 'all 0.3s ease',
+               border: '1px solid rgba(78, 205, 196, 0.4)',
+               opacity: loading ? 0.7 : 1,
+               backdropFilter: 'blur(20px)',
+               WebkitBackdropFilter: 'blur(20px)'
+             }}
+             onMouseEnter={(e) => {
+               if (!loading) {
+                 e.currentTarget.style.transform = 'translateY(-2px)';
+                 e.currentTarget.style.background = 'rgba(78, 205, 196, 0.3)';
+               }
+             }}
+             onMouseLeave={(e) => {
+               e.currentTarget.style.transform = 'translateY(0)';
+               e.currentTarget.style.background = 'rgba(78, 205, 196, 0.2)';
+             }}
+           >
+             Export 2b Analysis
            </button>
            
            <button
