@@ -13,6 +13,7 @@ function Console() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
+  const [sheetLink, setSheetLink] = useState('https://docs.google.com/spreadsheets/d/1glc_D_gx3jG-J-VCddlL0IlPqhTYlpE3pTdYdmipFbs/edit?usp=sharing');
 
   // Load saved settings on mount
   useEffect(() => {
@@ -394,7 +395,7 @@ function Console() {
        }
      }
 
-     // Now create the export data
+     // Now create the export data - grouped by customer
      const enrolled2b = [];
      const notEnrolled2b = [];
      const allCurrent2bEnrollments = [];
@@ -405,73 +406,102 @@ function Console() {
          return;
        }
 
-       // Create a set of 2b enrollments for easy lookup
-       const enrolled2bSet = new Set(
-         customer.enrollments_2b.map(e => `${e.class}-${e.role}`)
-       );
+       // Check enrollment status
+       const hasAny2aEnrollment = customer.enrollments_2a.length > 0;
+       const hasAny2bEnrollment = customer.enrollments_2b.length > 0;
 
-       // Process each 2a enrollment
-       customer.enrollments_2a.forEach(enrollment => {
-         const key = `${enrollment.class}-${enrollment.role}`;
-         const orderDetails = customer.has_platinum ? 'Platinum/Unlimited Bundle' : enrollment.class;
-         
-         if (enrolled2bSet.has(key)) {
-           // They're enrolled in 2b
+       // Get unique classes for 2a and 2b
+       const classes2a = [...new Set(customer.enrollments_2a.map(e => e.class))].sort();
+       const classes2b = [...new Set(customer.enrollments_2b.map(e => e.class))].sort();
+       
+       // Get unique roles
+       const roles = [...new Set([
+         ...customer.enrollments_2a.map(e => e.role),
+         ...customer.enrollments_2b.map(e => e.role)
+       ])].filter(r => r !== 'No Role').sort();
+
+       // Format classes string
+       const formatClasses = (classList) => {
+         if (classList.length === 5) return 'All Classes (L1, L2, L3, BM, Shines)';
+         if (classList.length === 3 && classList.includes('Level 1') && classList.includes('Level 2') && classList.includes('Level 3')) {
+           return 'All Levels (L1, L2, L3)';
+         }
+         return classList.join(', ');
+       };
+
+       // Determine order details based on actual enrolled classes
+       let orderDetails = '';
+       const allClasses = [...new Set([...classes2a, ...classes2b])];
+       if (customer.has_platinum) {
+         orderDetails = 'Platinum/Unlimited Bundle';
+       } else if (allClasses.length > 1) {
+         orderDetails = `Bundle: ${formatClasses(allClasses)}`;
+       } else if (allClasses.length === 1) {
+         orderDetails = allClasses[0];
+       } else {
+         orderDetails = 'Individual Class';
+       }
+
+       // Get first order ID
+       const orderId = customer.orders[0]?.order_id || 
+                       customer.enrollments_2a[0]?.order_id || 
+                       customer.enrollments_2b[0]?.order_id || 
+                       'N/A';
+
+       // Only process for categories 1 and 2 if they have 2a enrollment
+       if (hasAny2aEnrollment) {
+         if (hasAny2bEnrollment) {
+           // Customer has 2a AND is enrolled in at least one 2b class
            enrolled2b.push({
              customer_id: customer.customer_id,
              name: customer.name,
              email: customer.email,
-             order_id: enrollment.order_id,
-             class: enrollment.class,
-             role: enrollment.role,
+             order_id: orderId,
+             class: formatClasses(classes2a),
+             role: roles.join(', ') || 'No Role',
              order_details: orderDetails,
              notes: customer.has_platinum ? 'Bundle includes both blocks' : ''
            });
          } else {
-           // They're NOT enrolled in 2b for this class
-           // Check if they have other 2b enrollments
-           const other2bClasses = customer.enrollments_2b
-             .filter(e => e.class !== enrollment.class)
-             .map(e => e.class);
-           
+           // Customer has 2a but NO 2b enrollments
            notEnrolled2b.push({
              customer_id: customer.customer_id,
              name: customer.name,
              email: customer.email,
-             order_id: enrollment.order_id,
-             class: enrollment.class,
-             role: enrollment.role,
+             order_id: orderId,
+             class: formatClasses(classes2a),
+             role: roles.join(', ') || 'No Role',
              order_details: orderDetails,
-             notes: other2bClasses.length > 0 ? 
-               `Has enrolled in other classes for 2b: ${[...new Set(other2bClasses)].join(', ')}` : ''
+             notes: ''
            });
          }
-       });
+       }
 
-       // Add all 2b enrollments to the complete list
-       customer.enrollments_2b.forEach(enrollment => {
-         const orderDetails = customer.has_platinum ? 'Platinum/Unlimited Bundle' : enrollment.class;
+       // Add to all current 2b enrollments (if they have any 2b enrollment OR platinum/unlimited)
+       if (classes2b.length > 0 || (customer.has_platinum && classes2a.length > 0)) {
+         // For platinum/unlimited customers without explicit 2b, their 2b classes are same as 2a classes
+         const classes2bToShow = classes2b.length > 0 ? classes2b : classes2a;
          
          allCurrent2bEnrollments.push({
            customer_id: customer.customer_id,
            name: customer.name,
            email: customer.email,
-           order_id: enrollment.order_id,
-           class: enrollment.class,
-           role: enrollment.role,
+           order_id: orderId,
+           class: formatClasses(classes2bToShow),
+           role: roles.join(', ') || 'No Role',
            order_details: orderDetails,
-           notes: ''
+           notes: customer.has_platinum && classes2b.length === 0 ? 'Auto-enrolled via bundle' : ''
          });
-       });
+       }
      });
 
-     // Sort all three categories by class by default
+     // Sort all three categories by class first, then by name
      enrolled2b.sort((a, b) => {
        const classCompare = a.class.localeCompare(b.class);
        if (classCompare !== 0) return classCompare;
        return a.name.localeCompare(b.name);
      });
-
+     
      notEnrolled2b.sort((a, b) => {
        const classCompare = a.class.localeCompare(b.class);
        if (classCompare !== 0) return classCompare;
@@ -484,37 +514,10 @@ function Console() {
        return a.name.localeCompare(b.name);
      });
 
-     // Create CSV content
+     // Create headers for the sheet
      const headers = ['Customer ID', 'Name', 'Email', 'Order ID', 'Class', 'Role', 'Order Details', 'Notes', 'Category'];
      
-     // Combine all three datasets with category labels
-     const allRows = [
-       ...enrolled2b.map(row => ({...row, category: 'Enrolled for 2b'})),
-       ...notEnrolled2b.map(row => ({...row, category: 'Not Enrolled for 2b'})),
-       ...allCurrent2bEnrollments.map(row => ({...row, category: 'All Current 2b Enrollments'}))
-     ];
-
-     // Convert to CSV format
-     const csvContent = [
-       headers.join(','),
-       ...allRows.map(row => {
-         // Escape values that contain commas or quotes
-         const values = [
-           row.customer_id,
-           `"${row.name.replace(/"/g, '""')}"`,
-           `"${row.email.replace(/"/g, '""')}"`,
-           row.order_id,
-           `"${row.class}"`,
-           `"${row.role}"`,
-           `"${row.order_details.replace(/"/g, '""')}"`,
-           `"${row.notes.replace(/"/g, '""')}"`,
-           `"${row.category}"`
-         ];
-         return values.join(',');
-       })
-     ].join('\n');
-
-     // Add summary at the top
+     // Create summary rows
      const summaryRows = [
        'Term 2b Enrollment Analysis',
        `Exported: ${new Date().toLocaleString()}`,
@@ -524,24 +527,104 @@ function Console() {
        `Unique Customers NOT Enrolled in 2b: ${new Set(notEnrolled2b.map(r => r.customer_id)).size}`,
        `Total 2b Enrollments (from 2a who enrolled): ${enrolled2b.length}`,
        `Total Missing 2b Enrollments: ${notEnrolled2b.length}`,
-       `Total All Current 2b Enrollments: ${allCurrent2bEnrollments.length}`,
-       '',
-       ''
+       `Total All Current 2b Enrollments: ${allCurrent2bEnrollments.length}`
      ];
 
-     const fullCsvContent = summaryRows.join('\n') + '\n' + csvContent;
+     // Send data to Google Sheets
+     const sheetData = {
+       summary: summaryRows.filter(row => row !== ''), // Remove empty strings
+       headers: headers,
+       categories: [
+         {
+           name: 'Students from 2a who are also enrolled in 2b',
+           data: enrolled2b.map(row => [
+             row.customer_id,
+             row.name,
+             row.email,
+             row.order_id,
+             row.class,
+             row.role,
+             row.order_details,
+             row.notes,
+             row.category
+           ])
+         },
+         {
+           name: 'Students from 2a who have NOT enrolled in 2b',
+           data: notEnrolled2b.map(row => [
+             row.customer_id,
+             row.name,
+             row.email,
+             row.order_id,
+             row.class,
+             row.role,
+             row.order_details,
+             row.notes,
+             row.category
+           ])
+         },
+         {
+           name: 'All current Term 2b enrollments',
+           data: allCurrent2bEnrollments.map(row => [
+             row.customer_id,
+             row.name,
+             row.email,
+             row.order_id,
+             row.class,
+             row.role,
+             row.order_details,
+             row.notes,
+             row.category
+           ])
+         }
+       ]
+     };
 
-     // Create and download the CSV file
-     const filename = `enrollment_analysis_2b_${new Date().toISOString().split('T')[0]}.csv`;
-     const blob = new Blob([fullCsvContent], { type: 'text/csv;charset=utf-8;' });
-     const url = URL.createObjectURL(blob);
-     const a = document.createElement('a');
-     a.href = url;
-     a.download = filename;
-     a.click();
-     URL.revokeObjectURL(url);
+     // Send to Google Sheets
+     try {
+       const response = await fetch('https://script.google.com/macros/s/AKfycbyzO9GwBXaLTQL5q9W9xfiUcj7awoeIGqvVFsIyp2M2Pnps4fR3aJEh4VOGzf_js5CP/exec', {
+         method: 'POST',
+         redirect: 'follow',
+         headers: {
+           'Content-Type': 'text/plain',
+         },
+         body: JSON.stringify(sheetData)
+       });
 
-     setMessage(`Exported Term 2b enrollment analysis - ${enrolled2b.length} enrolled, ${notEnrolled2b.length} not enrolled`);
+       // With no-cors, we can't read the response, so we'll just assume success
+       // The sheet should update if the request goes through
+       setMessage(`Sheet update requested - ${enrolled2b.length} enrolled, ${notEnrolled2b.length} not enrolled. Check the sheet for updates.`);
+       
+       // Also try with mode: 'no-cors' as a fallback
+       if (!response.ok) {
+         await fetch('https://script.google.com/macros/s/AKfycbyzO9GwBXaLTQL5q9W9xfiUcj7awoeIGqvVFsIyp2M2Pnps4fR3aJEh4VOGzf_js5CP/exec', {
+           method: 'POST',
+           mode: 'no-cors',
+           body: JSON.stringify(sheetData)
+         });
+       }
+       
+     } catch (err) {
+       console.error('Error updating Google Sheets:', err);
+       
+       // Try alternative approach - create a form and submit it
+       const form = document.createElement('form');
+       form.method = 'POST';
+       form.action = 'https://script.google.com/macros/s/AKfycbyzO9GwBXaLTQL5q9W9xfiUcj7awoeIGqvVFsIyp2M2Pnps4fR3aJEh4VOGzf_js5CP/exec';
+       form.target = '_blank';
+       
+       const input = document.createElement('input');
+       input.type = 'hidden';
+       input.name = 'data';
+       input.value = JSON.stringify(sheetData);
+       
+       form.appendChild(input);
+       document.body.appendChild(form);
+       form.submit();
+       document.body.removeChild(form);
+       
+       setMessage('Opening new tab to update sheet - please check if it updated.');
+     }
    } catch (err) {
      console.error('Export error:', err);
      setMessage('Failed to export enrollment analysis');
@@ -1012,36 +1095,6 @@ function Console() {
            </button>
            
            <button
-             onClick={exportEnrollmentAnalysis}
-             disabled={loading}
-             style={{
-               padding: '1rem',
-               background: 'rgba(78, 205, 196, 0.2)',
-               color: 'var(--success)',
-               borderRadius: '12px',
-               fontWeight: '600',
-               cursor: loading ? 'not-allowed' : 'pointer',
-               transition: 'all 0.3s ease',
-               border: '1px solid rgba(78, 205, 196, 0.4)',
-               opacity: loading ? 0.7 : 1,
-               backdropFilter: 'blur(20px)',
-               WebkitBackdropFilter: 'blur(20px)'
-             }}
-             onMouseEnter={(e) => {
-               if (!loading) {
-                 e.currentTarget.style.transform = 'translateY(-2px)';
-                 e.currentTarget.style.background = 'rgba(78, 205, 196, 0.3)';
-               }
-             }}
-             onMouseLeave={(e) => {
-               e.currentTarget.style.transform = 'translateY(0)';
-               e.currentTarget.style.background = 'rgba(78, 205, 196, 0.2)';
-             }}
-           >
-             Export 2b Analysis
-           </button>
-           
-           <button
              onClick={() => showConfirmationModal('attendance')}
              disabled={loading}
              style={{
@@ -1180,6 +1233,123 @@ function Console() {
          >
            Delete All Logs
          </button>
+       </div>
+
+       {/* Analysis Card */}
+       <div style={{
+         background: 'var(--glass-bg)',
+         backdropFilter: 'blur(25px)',
+         WebkitBackdropFilter: 'blur(25px)',
+         border: '1px solid var(--glass-border)',
+         borderRadius: '28px',
+         padding: '3rem',
+         transition: 'all 0.4s ease',
+         position: 'relative',
+         overflow: 'hidden'
+       }}>
+         <div style={{
+           content: '""',
+           position: 'absolute',
+           top: 0,
+           left: 0,
+           right: 0,
+           height: '2px',
+           background: 'linear-gradient(90deg, var(--accent-warm), var(--accent-teal), var(--accent-gold))',
+           opacity: '0.7'
+         }}></div>
+         
+         <div style={{
+           fontSize: '3rem',
+           fontWeight: '800',
+           marginBottom: '0.8rem',
+           background: 'linear-gradient(135deg, var(--accent-warm) 0%, var(--accent-gold) 100%)',
+           WebkitBackgroundClip: 'text',
+           WebkitTextFillColor: 'transparent',
+           backgroundClip: 'text',
+           textAlign: 'center'
+         }}>
+           Analysis
+         </div>
+         <div style={{
+           color: 'var(--text-secondary)',
+           fontWeight: '600',
+           textTransform: 'uppercase',
+           letterSpacing: '2px',
+           fontSize: '0.9rem',
+           textAlign: 'center',
+           marginBottom: '2rem'
+         }}>
+           Term 2b Enrollment
+         </div>
+         
+         <div style={{
+           display: 'flex',
+           flexDirection: 'column',
+           gap: '1rem'
+         }}>
+           <button
+             onClick={exportEnrollmentAnalysis}
+             disabled={loading}
+             style={{
+               padding: '1rem',
+               background: 'rgba(78, 205, 196, 0.2)',
+               color: 'var(--success)',
+               borderRadius: '12px',
+               fontWeight: '600',
+               cursor: loading ? 'not-allowed' : 'pointer',
+               transition: 'all 0.3s ease',
+               border: '1px solid rgba(78, 205, 196, 0.4)',
+               opacity: loading ? 0.7 : 1,
+               backdropFilter: 'blur(20px)',
+               WebkitBackdropFilter: 'blur(20px)'
+             }}
+             onMouseEnter={(e) => {
+               if (!loading) {
+                 e.currentTarget.style.transform = 'translateY(-2px)';
+                 e.currentTarget.style.background = 'rgba(78, 205, 196, 0.3)';
+               }
+             }}
+             onMouseLeave={(e) => {
+               e.currentTarget.style.transform = 'translateY(0)';
+               e.currentTarget.style.background = 'rgba(78, 205, 196, 0.2)';
+             }}
+           >
+             {loading ? 'Updating Sheet...' : 'Update Google Sheet'}
+           </button>
+           
+           {sheetLink && (
+             <a
+               href={sheetLink}
+               target="_blank"
+               rel="noopener noreferrer"
+               style={{
+                 padding: '1rem',
+                 background: 'var(--glass-bg)',
+                 border: '1px solid var(--glass-border)',
+                 borderRadius: '12px',
+                 color: 'var(--accent-teal)',
+                 textDecoration: 'none',
+                 fontWeight: '600',
+                 textAlign: 'center',
+                 transition: 'all 0.3s ease',
+                 display: 'flex',
+                 alignItems: 'center',
+                 justifyContent: 'center',
+                 gap: '0.5rem'
+               }}
+               onMouseEnter={(e) => {
+                 e.currentTarget.style.background = 'var(--glass-hover)';
+                 e.currentTarget.style.transform = 'translateY(-2px)';
+               }}
+               onMouseLeave={(e) => {
+                 e.currentTarget.style.background = 'var(--glass-bg)';
+                 e.currentTarget.style.transform = 'translateY(0)';
+               }}
+             >
+               <span>📊</span> View Google Sheet
+             </a>
+           )}
+         </div>
        </div>
      </div>
      
