@@ -50,11 +50,41 @@ function Log() {
     });
   }
 
-  // Get current week number (1-5)
+// Get current week number based on term start date
   function getCurrentWeek() {
-    // This is a simple implementation - you might want to calculate based on term start date
-    const weekNumber = Math.ceil((new Date().getDate()) / 7);
-    return Math.min(weekNumber, 5); // Cap at 5
+    // Get term settings from localStorage (set by Console)
+    const termSettings = JSON.parse(localStorage.getItem('termSettings') || '{}');
+    const startDate = termSettings.startDate;
+    
+    if (!startDate) {
+      console.warn('No term start date found in settings, defaulting to week 1');
+      return 1;
+    }
+    
+    // Calculate weeks since term start
+    const termStart = new Date(startDate);
+    const today = new Date();
+    
+    // Reset time parts for accurate day calculation
+    termStart.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    
+    // Calculate difference in days
+    const diffTime = today - termStart;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    // Calculate week number (0-indexed, then add 1)
+    const weekNumber = Math.floor(diffDays / 7) + 1;
+    
+    console.log('Week calculation:', {
+      termStart: termStart.toDateString(),
+      today: today.toDateString(),
+      diffDays,
+      weekNumber
+    });
+    
+    // Cap at 5 weeks
+    return Math.max(1, Math.min(weekNumber, 5));
   }
 
   // Log selected rows and update attendance
