@@ -575,7 +575,7 @@ function Orders() {
   return (
     <div style={{ padding: '4rem 0' }}>
       {/* Search and Sync Bar */}
-      <div style={{
+      <div className="search-sync-container" style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -610,6 +610,7 @@ function Orders() {
           }}
         />
         <button
+          className="sync-button"
           onClick={syncFromShopify}
           disabled={loading}
           style={{
@@ -691,7 +692,7 @@ function Orders() {
       )}
       
       {/* Table Section */}
-      <div style={{
+      <div className="table-container" style={{
         background: 'var(--glass-bg)',
         backdropFilter: 'blur(25px)',
         WebkitBackdropFilter: 'blur(25px)',

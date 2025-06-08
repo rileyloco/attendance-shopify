@@ -231,6 +231,110 @@ function Log() {
     }
   }
 
+  // Log all unlogged entries
+  async function logAllUnlogged() {
+    const unloggedLogs = logs.filter(log => !log.logged);
+    if (unloggedLogs.length === 0) {
+      setMessage('No unlogged entries to process');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
+
+    const allUnloggedIds = unloggedLogs.map(log => log.id);
+    
+    try {
+      // Mark all as logged in UI immediately for responsiveness
+      setLogs(prevLogs => 
+        prevLogs.map(log => 
+          !log.logged ? { ...log, logged: true } : log
+        )
+      );
+
+      // Add to recently logged
+      setRecentlyLogged(new Set(allUnloggedIds));
+
+      // Get current week
+      const currentWeek = getCurrentWeek();
+      const weekColumn = `week_${currentWeek}`;
+
+      // Process paid attendance updates
+      const paidClasses = unloggedLogs.filter(log => 
+        !log.class.includes('FREE') && !log.class.includes('TRIAL')
+      );
+
+      if (paidClasses.length > 0) {
+        const attendanceUpdates = paidClasses.map(log => ({
+          customer_id: log.customer_id,
+          class_name: log.class,
+          role: log.role || '',
+          [weekColumn]: true
+        }));
+
+        for (const update of attendanceUpdates) {
+          const { error: updateError } = await supabase
+            .from('paid_attendance')
+            .update({ [weekColumn]: update[weekColumn] })
+            .eq('customer_id', update.customer_id)
+            .eq('class_name', update.class_name)
+            .eq('role', update.role);
+
+          if (updateError) {
+            console.error('Error updating paid attendance:', updateError);
+          }
+        }
+      }
+
+      // Process free attendance updates
+      const freeClasses = unloggedLogs.filter(log => 
+        log.class.includes('FREE') || log.class.includes('TRIAL')
+      );
+
+      if (freeClasses.length > 0) {
+        for (const log of freeClasses) {
+          const classDateMatch = log.class.match(/\(([^)]+)\)/);
+          if (classDateMatch) {
+            const classDate = classDateMatch[1];
+            
+            const { error: updateError } = await supabase
+              .from('free_attendance')
+              .update({ attended: true })
+              .eq('customer_id', log.customer_id)
+              .eq('class_date', classDate)
+              .eq('role', log.role || '');
+
+            if (updateError) {
+              console.error('Error updating free attendance:', updateError);
+            }
+          }
+        }
+      }
+
+      // Mark all logs as logged in database
+      const { error: logError } = await supabase
+        .from('log')
+        .update({ logged: true })
+        .in('id', allUnloggedIds);
+
+      if (logError) {
+        console.error('Error marking logs as logged:', logError);
+        // Revert on error
+        setLogs(prevLogs => 
+          prevLogs.map(log => 
+            allUnloggedIds.includes(log.id) ? { ...log, logged: false } : log
+          )
+        );
+        setMessage('Failed to update log status');
+        return;
+      }
+
+      setMessage(`Successfully logged all ${allUnloggedIds.length} records and updated attendance`);
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      console.error('Error logging all records:', err);
+      setMessage('Failed to log all records');
+    }
+  }
+
   // Filter logs based on search
   const filteredLogs = logs.filter((log) => {
     const searchStr = `${log.first_name} ${log.last_name} ${log.class} ${log.role || ''} ${log.notes || ''}`.toLowerCase();
@@ -502,43 +606,82 @@ function Log() {
           }}>
             Unlogged Check-ins ({unloggedEntries.length})
           </h2>
-          <button
-            onClick={logSelectedRows}
-            disabled={loading || selectedRows.size === 0}
-            style={{
-              padding: '0.75rem 1.5rem',
-              background: selectedRows.size === 0 
-                ? 'var(--glass-bg)' 
-                : 'rgba(78, 205, 196, 0.2)',
-              color: selectedRows.size === 0 ? 'var(--text-secondary)' : 'var(--success)',
-              borderRadius: '14px',
-              fontWeight: '600',
-              cursor: selectedRows.size === 0 ? 'not-allowed' : 'pointer',
-              transition: 'all 0.3s ease',
-              border: selectedRows.size === 0 
-                ? '1px solid var(--glass-border)' 
-                : '1px solid rgba(78, 205, 196, 0.4)',
-              opacity: selectedRows.size === 0 ? 0.7 : 1,
-              backdropFilter: 'blur(20px)',
-              WebkitBackdropFilter: 'blur(20px)'
-            }}
-            onMouseEnter={(e) => {
-              if (selectedRows.size > 0) {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 15px 35px rgba(78, 205, 196, 0.3)';
-                e.currentTarget.style.background = 'rgba(78, 205, 196, 0.3)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (selectedRows.size > 0) {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
-                e.currentTarget.style.background = 'rgba(78, 205, 196, 0.2)';
-              }
-            }}
-          >
-            Log Selected ({selectedRows.size})
-          </button>
+          <div className="log-buttons" style={{ display: 'flex', gap: '1rem' }}>
+            <button
+              onClick={logSelectedRows}
+              disabled={loading || selectedRows.size === 0}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: selectedRows.size === 0 
+                  ? 'var(--glass-bg)' 
+                  : 'rgba(78, 205, 196, 0.2)',
+                color: selectedRows.size === 0 ? 'var(--text-secondary)' : 'var(--success)',
+                borderRadius: '14px',
+                fontWeight: '600',
+                cursor: selectedRows.size === 0 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.3s ease',
+                border: selectedRows.size === 0 
+                  ? '1px solid var(--glass-border)' 
+                  : '1px solid rgba(78, 205, 196, 0.4)',
+                opacity: selectedRows.size === 0 ? 0.7 : 1,
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)'
+              }}
+              onMouseEnter={(e) => {
+                if (selectedRows.size > 0) {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 15px 35px rgba(78, 205, 196, 0.3)';
+                  e.currentTarget.style.background = 'rgba(78, 205, 196, 0.3)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (selectedRows.size > 0) {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.background = 'rgba(78, 205, 196, 0.2)';
+                }
+              }}
+            >
+              Log Selected ({selectedRows.size})
+            </button>
+            <button
+              onClick={logAllUnlogged}
+              disabled={loading || unloggedEntries.length === 0}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: unloggedEntries.length === 0 
+                  ? 'var(--glass-bg)' 
+                  : 'rgba(232, 93, 47, 0.2)',
+                color: unloggedEntries.length === 0 ? 'var(--text-secondary)' : 'var(--accent-warm)',
+                borderRadius: '14px',
+                fontWeight: '600',
+                cursor: unloggedEntries.length === 0 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.3s ease',
+                border: unloggedEntries.length === 0 
+                  ? '1px solid var(--glass-border)' 
+                  : '1px solid rgba(232, 93, 47, 0.4)',
+                opacity: unloggedEntries.length === 0 ? 0.7 : 1,
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)'
+              }}
+              onMouseEnter={(e) => {
+                if (unloggedEntries.length > 0) {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 15px 35px rgba(232, 93, 47, 0.3)';
+                  e.currentTarget.style.background = 'rgba(232, 93, 47, 0.3)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (unloggedEntries.length > 0) {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.background = 'rgba(232, 93, 47, 0.2)';
+                }
+              }}
+            >
+              Log All ({unloggedEntries.length})
+            </button>
+          </div>
         </div>
         <div style={{
           background: 'var(--glass-bg)',

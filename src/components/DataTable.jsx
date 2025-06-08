@@ -70,16 +70,61 @@ export default function DataTable({ headers, rows }) {
   }
 
   return (
-    <div className="overflow-x-auto" style={{
-      scrollbarWidth: 'none',
-      msOverflowStyle: 'none'
-    }}>
-      <style jsx>{`
-        .overflow-x-auto::-webkit-scrollbar {
-          display: none;
-        }
-      `}</style>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+    <>
+      {/* Mobile Card View */}
+      <div className="mobile-cards" style={{ display: 'none' }}>
+        {sortedRows.map((row, rowIdx) => (
+          <div key={rowIdx} className="mobile-card" style={{
+            background: 'var(--glass-bg)',
+            border: '1px solid var(--glass-border)',
+            borderRadius: '16px',
+            padding: '1rem',
+            marginBottom: '1rem',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)'
+          }}>
+            {headers.map((header, idx) => {
+              // Skip empty cells or checkboxes
+              if (!row[idx] || typeof row[idx] !== 'string') return null;
+              
+              return (
+                <div key={idx} style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  padding: '0.5rem 0',
+                  borderBottom: idx < headers.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none'
+                }}>
+                  <span style={{
+                    color: 'var(--text-muted)',
+                    fontSize: '0.875rem',
+                    fontWeight: '600'
+                  }}>{header}:</span>
+                  <span style={{
+                    color: 'var(--text-primary)',
+                    fontSize: '0.875rem',
+                    textAlign: 'right',
+                    maxWidth: '60%',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}>{row[idx]}</span>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      
+      {/* Desktop Table View */}
+      <div className="desktop-table overflow-x-auto" style={{
+        scrollbarWidth: 'none',
+        msOverflowStyle: 'none'
+      }}>
+        <style jsx>{`
+          .overflow-x-auto::-webkit-scrollbar {
+            display: none;
+          }
+        `}</style>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
             {headers.map((header, idx) => {
@@ -174,23 +219,24 @@ export default function DataTable({ headers, rows }) {
             </tr>
           ))}
         </tbody>
-      </table>
-      
-      <style jsx>{`
-        .overflow-x-auto::-webkit-scrollbar {
-          display: none;
-        }
-        @keyframes fadeInRow {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
+        </table>
+        
+        <style jsx>{`
+          .overflow-x-auto::-webkit-scrollbar {
+            display: none;
           }
-          to {
-            opacity: 1;
-            transform: translateY(0);
+          @keyframes fadeInRow {
+            from {
+              opacity: 0;
+              transform: translateY(10px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
           }
-        }
-      `}</style>
-    </div>
+        `}</style>
+      </div>
+    </>
   );
 }

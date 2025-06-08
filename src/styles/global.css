@@ -500,16 +500,79 @@ body.kiosk-mode {
   .table-container {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    padding: 1rem !important;
   }
 
   table {
     min-width: 600px;
   }
+
+  /* Search and sync container responsive */
+  .search-sync-container {
+    flex-direction: column !important;
+    gap: 1rem !important;
+  }
+
+  .search-sync-container input {
+    width: 100% !important;
+  }
+
+  .sync-button {
+    width: 100% !important;
+    white-space: nowrap;
+  }
+
+  /* Prevent button text overflow */
+  button {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Mobile card view for tables */
+  .mobile-cards {
+    display: block !important;
+  }
+
+  .desktop-table {
+    display: none !important;
+  }
+
+  .mobile-card {
+    animation: fadeInRow 0.3s ease forwards;
+  }
+
+  /* Hide checkbox cells in mobile cards */
+  .mobile-card input[type="checkbox"] {
+    display: none;
+  }
+
+  /* Log page buttons responsive */
+  .log-buttons {
+    flex-direction: column !important;
+    width: 100%;
+  }
+
+  .log-buttons button {
+    width: 100% !important;
+  }
 }
 
 /* Kiosk mode specific (when in kiosk mode) */
 body.kiosk-mode {
-  /* Your existing kiosk styles */
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+}
+
+/* Force hide navbar in kiosk mode with !important */
+body.kiosk-mode .navbar {
+  display: none !important;
+}
+
+/* Ensure mobile menu is also hidden */
+body.kiosk-mode .mobile-menu {
+  display: none !important;
 }
 
 /* Prevent horizontal scroll */

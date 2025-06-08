@@ -24,6 +24,18 @@ function Kiosk() {
       // Add kiosk class to body
       document.body.classList.add('kiosk-mode');
       
+      // Mobile-specific: Force hide navbar
+      const hideNavbarOnMobile = () => {
+        const navbar = document.querySelector('.navbar');
+        if (navbar) {
+          navbar.style.display = 'none';
+        }
+      };
+      
+      // Apply immediately and after a short delay (for mobile rendering)
+      hideNavbarOnMobile();
+      setTimeout(hideNavbarOnMobile, 100);
+      
       // Disable right-click context menu
       const preventContextMenu = (e) => e.preventDefault();
       document.addEventListener('contextmenu', preventContextMenu);
@@ -31,6 +43,8 @@ function Kiosk() {
       // Disable text selection
       document.body.style.userSelect = 'none';
       document.body.style.webkitUserSelect = 'none';
+      document.body.style.mozUserSelect = 'none';
+      document.body.style.msUserSelect = 'none';
       
       // Prevent navigation with keyboard shortcuts
       const preventNavigation = (e) => {
@@ -49,14 +63,37 @@ function Kiosk() {
       };
       document.addEventListener('keydown', preventNavigation);
       
-      // Disable back button by manipulating history
-      history.pushState(null, null, location.href);
-      window.onpopstate = function () {
-        history.go(1);
+      // More aggressive back button prevention for mobile
+      const preventBack = () => {
+        window.history.pushState(null, '', window.location.href);
       };
       
-      // Try to go fullscreen
-      if (document.documentElement.requestFullscreen) {
+      preventBack();
+      window.addEventListener('popstate', preventBack);
+      
+      // Mobile touch events to prevent swipe navigation
+      let touchStartX = 0;
+      const handleTouchStart = (e) => {
+        touchStartX = e.touches[0].clientX;
+      };
+      
+      const handleTouchMove = (e) => {
+        if (!touchStartX) return;
+        
+        const touchEndX = e.touches[0].clientX;
+        const diff = touchStartX - touchEndX;
+        
+        // Prevent swipe back/forward (typically triggered at screen edges)
+        if (Math.abs(diff) > 50 && (touchStartX < 20 || touchStartX > window.innerWidth - 20)) {
+          e.preventDefault();
+        }
+      };
+      
+      document.addEventListener('touchstart', handleTouchStart);
+      document.addEventListener('touchmove', handleTouchMove, { passive: false });
+      
+      // Try to go fullscreen (desktop only - mobile requires user gesture)
+      if (document.documentElement.requestFullscreen && !('ontouchstart' in window)) {
         document.documentElement.requestFullscreen().catch(err => {
           console.log('Fullscreen request failed:', err);
         });
@@ -67,8 +104,19 @@ function Kiosk() {
         document.body.classList.remove('kiosk-mode');
         document.removeEventListener('contextmenu', preventContextMenu);
         document.removeEventListener('keydown', preventNavigation);
+        document.removeEventListener('popstate', preventBack);
+        document.removeEventListener('touchstart', handleTouchStart);
+        document.removeEventListener('touchmove', handleTouchMove);
         document.body.style.userSelect = '';
         document.body.style.webkitUserSelect = '';
+        document.body.style.mozUserSelect = '';
+        document.body.style.msUserSelect = '';
+        
+        // Restore navbar
+        const navbar = document.querySelector('.navbar');
+        if (navbar) {
+          navbar.style.display = '';
+        }
       };
     }
   }, []);
