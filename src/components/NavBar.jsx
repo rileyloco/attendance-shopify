@@ -1,9 +1,10 @@
 // src/components/NavBar.jsx
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 
 function NavBar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [termDisplay, setTermDisplay] = useState('');
   
   const mainLinks = [
@@ -38,18 +39,9 @@ function NavBar() {
     };
   }, []);
 
-  // Open Kiosk in new window
+  // Navigate to Kiosk page
   function openKiosk() {
-    const height = window.screen.height * 0.9; // 90% of screen height
-    const width = 800;
-    const left = (window.screen.width - width) / 2;
-    const top = (window.screen.height - height) / 2;
-    
-    window.open(
-      '/kiosk', 
-      '_blank', 
-      `width=${width},height=${height},left=${left},top=${top},location=no,toolbar=no,menubar=no,status=no`
-    );
+    navigate('/kiosk?mode=kiosk');
   }
 
   return (

@@ -530,6 +530,144 @@ function Console() {
        `Total All Current 2b Enrollments: ${allCurrent2bEnrollments.length}`
      ];
 
+     // Fetch free class orders directly from Shopify
+     setMessage('Fetching free class orders from Shopify...');
+     
+     // Calculate date range (5 weeks before current date)
+     const fiveWeeksAgo = new Date();
+     fiveWeeksAgo.setDate(fiveWeeksAgo.getDate() - (5 * 7));
+     const freeClassSinceDate = fiveWeeksAgo.toISOString();
+
+     // Fetch from Shopify via Netlify function
+     const freeClassResponse = await fetch('/.netlify/functions/shopify-orders', {
+       method: 'POST',
+       headers: {
+         'Content-Type': 'application/json'
+       },
+       body: JSON.stringify({ since: freeClassSinceDate })
+     });
+
+     if (!freeClassResponse.ok) {
+       throw new Error(`Failed to fetch free class orders: ${freeClassResponse.statusText}`);
+     }
+
+     const freeClassData = await freeClassResponse.json();
+     const freeClassOrders = freeClassData.orders || [];
+     
+     console.log(`Fetched ${freeClassOrders.length} orders from Shopify for free class analysis`);
+
+     // Extract free class students from Shopify orders
+     const freeClassStudents = {};
+     
+     freeClassOrders.forEach(order => {
+       order.line_items.forEach(item => {
+         const title = item.title.toLowerCase();
+         const variant = (item.variant_title || '').toLowerCase();
+         
+         // Check if it's a free class
+         if (title.includes('free class')) {
+           const customerId = order.customer?.id;
+           if (!customerId) return;
+           
+           // Extract role from variant
+           let role = '';
+           if (variant.includes('leader')) role = 'Leader';
+           else if (variant.includes('follower')) role = 'Follower';
+           
+           // Parse date from variant (e.g., "27th May")
+           const dateMatch = item.variant_title?.match(/(\d{1,2})(st|nd|rd|th)\s+(\w+)/);
+           let classDate = 'Date not parsed';
+           if (dateMatch) {
+             const day = parseInt(dateMatch[1]);
+             const monthName = dateMatch[3];
+             classDate = `${day} ${monthName}`;
+           }
+           
+           if (!freeClassStudents[customerId]) {
+             freeClassStudents[customerId] = {
+               customer_id: customerId,
+               name: 'Unknown', // Will be filled from database
+               email: '', // Will be filled from database
+               hasSignedUp: false,
+               classSignedUpTo: '',
+               freeClassDates: [],
+               freeClassRole: role
+             };
+           }
+           
+           // Add this free class date
+           freeClassStudents[customerId].freeClassDates.push(classDate);
+           if (role && !freeClassStudents[customerId].freeClassRole) {
+             freeClassStudents[customerId].freeClassRole = role;
+           }
+         }
+       });
+     });
+
+     // Fetch customer details from database
+     const freeClassCustomerIds = Object.keys(freeClassStudents).map(id => parseInt(id));
+     
+     if (freeClassCustomerIds.length > 0) {
+       const { data: freeClassCustomerData, error: customerError } = await supabase
+         .from('customers')
+         .select('customer_id, first_name, last_name, email')
+         .in('customer_id', freeClassCustomerIds);
+
+       if (customerError) {
+         console.error('Error fetching free class customer details:', customerError);
+       } else {
+         // Update customer names and emails
+         (freeClassCustomerData || []).forEach(customer => {
+           if (freeClassStudents[customer.customer_id]) {
+             freeClassStudents[customer.customer_id].name = 
+               `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || 'Unknown';
+             freeClassStudents[customer.customer_id].email = customer.email || '';
+           }
+         });
+       }
+     }
+
+     // Now check which free class students have signed up for paid classes
+     Object.keys(freeClassStudents).forEach(customerId => {
+       // Convert customerId to number for comparison
+       const customerIdNum = parseInt(customerId);
+       
+       // Check if they're in our enrolled lists
+       const inEnrolled = enrolled2b.some(e => e.customer_id === customerIdNum);
+       const inNotEnrolled = notEnrolled2b.some(e => e.customer_id === customerIdNum);
+       const inAll2b = allCurrent2bEnrollments.some(e => e.customer_id === customerIdNum);
+       
+       if (inEnrolled || inNotEnrolled || inAll2b) {
+         freeClassStudents[customerId].hasSignedUp = true;
+         
+         // Get their classes from all lists
+         const enrolledClasses = [
+           ...enrolled2b.filter(e => e.customer_id === customerIdNum),
+           ...notEnrolled2b.filter(e => e.customer_id === customerIdNum),
+           ...allCurrent2bEnrollments.filter(e => e.customer_id === customerIdNum)
+         ].map(e => e.class);
+         
+         // Remove duplicates and format
+         const uniqueClasses = [...new Set(enrolledClasses)];
+         freeClassStudents[customerId].classSignedUpTo = uniqueClasses.join(', ');
+       }
+     });
+
+     // Convert to arrays and sort by name
+     const allFreeClassStudents = Object.values(freeClassStudents).sort((a, b) => 
+       a.name.localeCompare(b.name)
+     );
+     
+     const freeClassStudentsWhoSignedUp = allFreeClassStudents.filter(s => s.hasSignedUp);
+     
+     // Filter for free class students who signed up for Term 2a specifically
+     const freeClassStudentsIn2a = freeClassStudentsWhoSignedUp.filter(student => {
+       const customerIdNum = parseInt(student.customer_id);
+       // Check if they're in either the enrolled2b or notEnrolled2b lists (both are from 2a)
+       return enrolled2b.some(e => e.customer_id === customerIdNum) || 
+              notEnrolled2b.some(e => e.customer_id === customerIdNum);
+     });
+
      // Send data to Google Sheets
      const sheetData = {
        summary: summaryRows.filter(row => row !== ''), // Remove empty strings
@@ -575,6 +713,48 @@ function Console() {
              row.order_details,
              row.notes,
              row.category
+           ])
+         },
+         {
+           name: 'All free class students (past 5 weeks)',
+           data: allFreeClassStudents.map(student => [
+             student.customer_id,
+             student.name,
+             student.email,
+             '', // No order ID for this view
+             student.classSignedUpTo || '-',
+             student.freeClassRole || '-', // Show their free class role
+             `Free classes: ${student.freeClassDates.slice(0, 3).join(', ')}${student.freeClassDates.length > 3 ? '...' : ''}`, // Show dates attended
+             student.hasSignedUp ? 'Yes' : 'No', // Has Signed Up in notes column
+             'Free Class Students'
+           ])
+         },
+         {
+           name: 'Free class students who signed up for paid classes',
+           data: freeClassStudentsWhoSignedUp.map(student => [
+             student.customer_id,
+             student.name,
+             student.email,
+             '', // No order ID for this view
+             student.classSignedUpTo,
+             student.freeClassRole || '-',
+             `Free classes: ${student.freeClassDates.slice(0, 3).join(', ')}${student.freeClassDates.length > 3 ? '...' : ''}`,
+             'Converted to paid', // Notes
+             'Free to Paid Conversions'
+           ])
+         },
+         {
+           name: 'Free class students who signed up for Term 2a',
+           data: freeClassStudentsIn2a.map(student => [
+             student.customer_id,
+             student.name,
+             student.email,
+             '', // No order ID for this view
+             student.classSignedUpTo,
+             student.freeClassRole || '-',
+             `Free classes: ${student.freeClassDates.slice(0, 3).join(', ')}${student.freeClassDates.length > 3 ? '...' : ''}`,
+             'Free to Term 2a', // Notes
+             'Free to Term 2a Conversions'
            ])
          }
        ]

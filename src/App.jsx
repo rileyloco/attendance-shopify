@@ -1,5 +1,5 @@
 // App.jsx
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import NavBar from './components/NavBar';
 import Home from './pages/Home';
 import Customers from './pages/Customers';
@@ -9,14 +9,18 @@ import Orders from './pages/Orders';
 import Console from './pages/Console';
 import Kiosk from './pages/Kiosk';
 
-function App() {
+function AppContent() {
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const isKioskMode = location.pathname === '/kiosk' && searchParams.get('mode') === 'kiosk';
+  
   return (
-    <Router>
-      <NavBar />
+    <>
+      {!isKioskMode && <NavBar />}
       <div style={{
-        maxWidth: '900px',
+        maxWidth: isKioskMode ? '100%' : '900px',
         margin: '0 auto',
-        padding: '0 2rem'
+        padding: isKioskMode ? '0' : '0 2rem'
       }}>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -28,6 +32,14 @@ function App() {
           <Route path="/kiosk" element={<Kiosk />} />
         </Routes>
       </div>
+    </>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
     </Router>
   );
 }

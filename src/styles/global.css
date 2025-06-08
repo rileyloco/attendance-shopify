@@ -302,3 +302,60 @@ input[type="checkbox"]:checked::after {
   margin: 0 auto;
   padding: 4rem 2rem;
 }
+
+/* Kiosk mode styles */
+body.kiosk-mode {
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Hide any potential navigation elements in kiosk mode */
+body.kiosk-mode nav,
+body.kiosk-mode .navbar,
+body.kiosk-mode .navigation,
+body.kiosk-mode header,
+body.kiosk-mode .header,
+body.kiosk-mode .menu,
+body.kiosk-mode .nav-bar {
+  display: none !important;
+}
+
+/* Full screen content in kiosk mode */
+body.kiosk-mode .main-content,
+body.kiosk-mode #root > div {
+  height: 100vh;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+/* Disable text cursor in kiosk mode */
+body.kiosk-mode * {
+  cursor: default !important;
+}
+
+/* Buttons should still have pointer cursor */
+body.kiosk-mode button,
+body.kiosk-mode a,
+body.kiosk-mode input,
+body.kiosk-mode .clickable {
+  cursor: pointer !important;
+}
+
+/* Hide scrollbars in kiosk mode */
+body.kiosk-mode::-webkit-scrollbar {
+  display: none;
+}
+
+body.kiosk-mode {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Prevent zooming on mobile in kiosk mode */
+body.kiosk-mode {
+  touch-action: manipulation;
+}

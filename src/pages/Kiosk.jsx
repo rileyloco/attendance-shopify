@@ -13,22 +13,63 @@ function Kiosk() {
   const [isKioskWindow, setIsKioskWindow] = useState(false);
   const [loadingClasses, setLoadingClasses] = useState(false);
 
-  // Check if this is a kiosk window (opened in new window)
+  // Check if this is kiosk mode
   useEffect(() => {
-    // Check if window.opener exists (means it was opened by another window)
-    if (window.opener) {
+    const searchParams = new URLSearchParams(window.location.search);
+    const isKiosk = searchParams.get('mode') === 'kiosk';
+    
+    if (isKiosk) {
       setIsKioskWindow(true);
-      // Hide navbar if it exists
-      const navbar = document.querySelector('nav');
-      if (navbar) {
-        navbar.style.display = 'none';
-      }
+      
+      // Add kiosk class to body
+      document.body.classList.add('kiosk-mode');
+      
+      // Disable right-click context menu
+      const preventContextMenu = (e) => e.preventDefault();
+      document.addEventListener('contextmenu', preventContextMenu);
+      
+      // Disable text selection
+      document.body.style.userSelect = 'none';
+      document.body.style.webkitUserSelect = 'none';
+      
+      // Prevent navigation with keyboard shortcuts
+      const preventNavigation = (e) => {
+        // Prevent F5, Ctrl+R (refresh)
+        if ((e.key === 'F5') || (e.ctrlKey && e.key === 'r')) {
+          e.preventDefault();
+        }
+        // Prevent Alt+Left Arrow (back)
+        if (e.altKey && e.key === 'ArrowLeft') {
+          e.preventDefault();
+        }
+        // Prevent Ctrl+L (focus address bar)
+        if (e.ctrlKey && e.key === 'l') {
+          e.preventDefault();
+        }
+      };
+      document.addEventListener('keydown', preventNavigation);
+      
+      // Disable back button by manipulating history
+      history.pushState(null, null, location.href);
+      window.onpopstate = function () {
+        history.go(1);
+      };
+      
       // Try to go fullscreen
       if (document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(err => {
           console.log('Fullscreen request failed:', err);
         });
       }
+      
+      // Cleanup function
+      return () => {
+        document.body.classList.remove('kiosk-mode');
+        document.removeEventListener('contextmenu', preventContextMenu);
+        document.removeEventListener('keydown', preventNavigation);
+        document.body.style.userSelect = '';
+        document.body.style.webkitUserSelect = '';
+      };
     }
   }, []);
 
