@@ -993,7 +993,7 @@ function Console() {
          Term Settings
        </h2>
        
-       <div style={{
+       <div className="console-form-grid" style={{
          display: 'grid',
          gridTemplateColumns: 'repeat(2, 1fr)',
          gap: '1.5rem',
@@ -1078,7 +1078,7 @@ function Console() {
          </div>
        </div>
        
-       <div style={{
+       <div className="console-form-grid" style={{
          display: 'grid',
          gridTemplateColumns: 'repeat(2, 1fr)',
          gap: '1.5rem',
@@ -1130,7 +1130,10 @@ function Console() {
              color: 'var(--text-secondary)',
              marginBottom: '0.5rem',
              textTransform: 'uppercase',
-             letterSpacing: '1px'
+             letterSpacing: '1px',
+             whiteSpace: 'nowrap',
+             overflow: 'hidden',
+             textOverflow: 'ellipsis'
            }}>
              End Date (Week 5)
            </label>
@@ -1187,7 +1190,7 @@ function Console() {
      </div>
 
      {/* Management Cards Grid */}
-     <div style={{
+     <div className="console-cards-grid" style={{
        display: 'grid',
        gridTemplateColumns: 'repeat(2, 1fr)',
        gap: '2.5rem'

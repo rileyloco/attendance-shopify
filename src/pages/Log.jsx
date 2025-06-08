@@ -509,7 +509,7 @@ function Log() {
   return (
     <div style={{ padding: '4rem 0' }}>
       {/* Search and Action Bar */}
-      <div style={{
+      <div className="search-sync-container" style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',

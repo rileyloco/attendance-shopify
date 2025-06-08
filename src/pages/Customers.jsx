@@ -103,9 +103,10 @@ function Customers() {
       padding: '4rem 0'
     }}>
       {/* Search and Upload Bar */}
-      <div style={{
+      <div className="search-sync-container" style={{
         display: 'flex',
         justifyContent: 'space-between',
+        alignItems: 'center',
         gap: '2rem',
         marginBottom: '3rem'
       }}>
@@ -169,7 +170,7 @@ function Customers() {
       </div>
       
       {/* Table Section */}
-      <div style={{
+      <div className="table-container" style={{
         background: 'var(--glass-bg)',
         backdropFilter: 'blur(25px)',
         WebkitBackdropFilter: 'blur(25px)',
