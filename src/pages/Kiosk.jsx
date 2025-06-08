@@ -299,25 +299,31 @@ function Kiosk() {
     <div style={{
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
-      padding: '3rem 2rem',
+      padding: window.innerWidth <= 768 ? '1.5rem 1rem' : '3rem 2rem',
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'center'
+      justifyContent: 'center',
+      boxSizing: 'border-box'
     }}>
       <div style={{
         width: '100%',
-        maxWidth: '600px',
-        margin: '0 auto'
+        maxWidth: window.innerWidth <= 768 ? '100%' : '600px',
+        margin: '0 auto',
+        padding: window.innerWidth <= 768 ? '0 0.5rem' : '0'
       }}>
         {/* Logo/Title */}
-        <div style={{ textAlign: 'center', marginBottom: '7rem' }}>
-<img 
+        <div style={{ 
+          textAlign: 'center', 
+          marginBottom: window.innerWidth <= 768 ? '3rem' : '7rem'
+        }}>
+          <img 
             src="/logo7.png" 
             alt="LocoMojo" 
             style={{
-              height: '160px',
+              height: window.innerWidth <= 768 ? '100px' : '160px',
               width: 'auto',
-              opacity: 0.9
+              opacity: 0.9,
+              maxWidth: '90%'
             }}
           />
         </div>
@@ -328,12 +334,15 @@ function Kiosk() {
           backdropFilter: 'blur(25px)',
           WebkitBackdropFilter: 'blur(25px)',
           border: '1px solid var(--glass-border)',
-          borderRadius: '28px',
-          padding: '3rem',
+          borderRadius: window.innerWidth <= 768 ? '20px' : '28px',
+          padding: window.innerWidth <= 768 ? '1.5rem' : '3rem',
           position: 'relative',
           overflow: 'hidden',
           transition: 'all 0.5s ease',
-          minHeight: selectedCustomer && eligibleClasses.length > 0 ? '420px' : '180px'
+          minHeight: selectedCustomer && eligibleClasses.length > 0 
+            ? (window.innerWidth <= 768 ? '350px' : '420px') 
+            : (window.innerWidth <= 768 ? '140px' : '180px'),
+          fontSize: window.innerWidth <= 768 ? '14px' : '16px'
         }}>
           <div style={{
             content: '""',
@@ -359,15 +368,17 @@ function Kiosk() {
               spellCheck="false"
               style={{
                 width: '100%',
-                padding: '1.25rem 1.5rem',
-                fontSize: '1.1rem',
+                padding: window.innerWidth <= 768 ? '1rem 1.25rem' : '1.25rem 1.5rem',
+                fontSize: window.innerWidth <= 768 ? '16px' : '1.1rem',
                 background: selectedCustomer ? 'rgba(94, 188, 126, 0.08)' : 'var(--glass-bg)',
                 border: '2px solid',
                 borderColor: selectedCustomer ? 'rgba(94, 188, 126, 0.4)' : 'var(--glass-border)',
                 borderRadius: '16px',
                 color: 'var(--text-primary)',
                 outline: 'none',
-                transition: 'all 0.3s ease'
+                transition: 'all 0.3s ease',
+                WebkitAppearance: 'none',
+                appearance: 'none'
               }}
               onFocus={(e) => {
                 e.target.style.borderColor = '#5ebc7e';

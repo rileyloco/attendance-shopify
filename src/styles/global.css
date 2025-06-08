@@ -359,3 +359,27 @@ body.kiosk-mode {
 body.kiosk-mode {
   touch-action: manipulation;
 }
+
+/* Mobile-specific kiosk mode adjustments */
+@media (max-width: 768px) {
+  body.kiosk-mode {
+    font-size: 16px !important; /* Prevents zoom on iOS */
+  }
+  
+  body.kiosk-mode input,
+  body.kiosk-mode textarea,
+  body.kiosk-mode select {
+    font-size: 16px !important; /* Prevents zoom on input focus */
+  }
+  
+  /* Ensure proper scaling on mobile */
+  body.kiosk-mode #root {
+    min-height: 100vh;
+    min-height: -webkit-fill-available; /* Better iOS support */
+  }
+}
+
+/* Prevent double-tap zoom */
+body.kiosk-mode * {
+  touch-action: manipulation;
+}
