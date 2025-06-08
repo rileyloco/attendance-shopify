@@ -88,9 +88,9 @@ function Home() {
   ];
 
   return (
-    <div style={{ padding: '4rem 0', minHeight: '100vh' }}>
+    <div className="home-container" style={{ padding: '4rem 0', minHeight: '100vh' }}>
       {/* Stats Grid */}
-      <div style={{
+      <div className="home-grid" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(2, 1fr)',
         gap: '2.5rem'
@@ -99,6 +99,7 @@ function Home() {
           page.action === 'window' ? (
             <button
               key={page.to}
+              className="home-card"
               onClick={() => handleNavigation(page)}
               style={{
                 background: 'var(--glass-bg)',
@@ -136,7 +137,7 @@ function Home() {
                 background: cardGradients[index].border,
                 opacity: '0.7'
               }}></div>
-              <div style={{
+              <div className="home-card-title" style={{
                 fontSize: '2.5rem',
                 fontWeight: '800',
                 marginBottom: '0.8rem',
@@ -150,6 +151,7 @@ function Home() {
             <Link
               key={page.to}
               to={page.to}
+              className="home-card"
               style={{
                 display: 'block',
                 background: 'var(--glass-bg)',
@@ -187,7 +189,7 @@ function Home() {
                 background: cardGradients[index].border,
                 opacity: '0.7'
               }}></div>
-              <div style={{
+              <div className="home-card-title" style={{
                 fontSize: '2.5rem',
                 fontWeight: '800',
                 marginBottom: '0.8rem',

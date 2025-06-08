@@ -296,53 +296,44 @@ function Kiosk() {
   }
 
   return (
-    <div style={{
+    <div className="kiosk-container" style={{
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
-      padding: window.innerWidth <= 768 ? '1.5rem 1rem' : '3rem 2rem',
+      padding: '3rem 2rem',
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'center',
-      boxSizing: 'border-box'
+      justifyContent: 'center'
     }}>
-      <div style={{
+      <div className="kiosk-content" style={{
         width: '100%',
-        maxWidth: window.innerWidth <= 768 ? '100%' : '600px',
-        margin: '0 auto',
-        padding: window.innerWidth <= 768 ? '0 0.5rem' : '0'
+        maxWidth: '600px',
+        margin: '0 auto'
       }}>
         {/* Logo/Title */}
-        <div style={{ 
-          textAlign: 'center', 
-          marginBottom: window.innerWidth <= 768 ? '3rem' : '7rem'
-        }}>
+        <div className="kiosk-logo" style={{ textAlign: 'center', marginBottom: '7rem' }}>
           <img 
             src="/logo7.png" 
             alt="LocoMojo" 
             style={{
-              height: window.innerWidth <= 768 ? '100px' : '160px',
+              height: '160px',
               width: 'auto',
-              opacity: 0.9,
-              maxWidth: '90%'
+              opacity: 0.9
             }}
           />
         </div>
 
         {/* Main Card with smooth transitions */}
-        <div style={{
+        <div className="kiosk-card" style={{
           background: 'var(--glass-bg)',
           backdropFilter: 'blur(25px)',
           WebkitBackdropFilter: 'blur(25px)',
           border: '1px solid var(--glass-border)',
-          borderRadius: window.innerWidth <= 768 ? '20px' : '28px',
-          padding: window.innerWidth <= 768 ? '1.5rem' : '3rem',
+          borderRadius: '28px',
+          padding: '3rem',
           position: 'relative',
           overflow: 'hidden',
           transition: 'all 0.5s ease',
-          minHeight: selectedCustomer && eligibleClasses.length > 0 
-            ? (window.innerWidth <= 768 ? '350px' : '420px') 
-            : (window.innerWidth <= 768 ? '140px' : '180px'),
-          fontSize: window.innerWidth <= 768 ? '14px' : '16px'
+          minHeight: selectedCustomer && eligibleClasses.length > 0 ? '420px' : '180px'
         }}>
           <div style={{
             content: '""',
@@ -366,19 +357,18 @@ function Kiosk() {
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck="false"
+              className="kiosk-input"
               style={{
                 width: '100%',
-                padding: window.innerWidth <= 768 ? '1rem 1.25rem' : '1.25rem 1.5rem',
-                fontSize: window.innerWidth <= 768 ? '16px' : '1.1rem',
+                padding: '1.25rem 1.5rem',
+                fontSize: '1.1rem',
                 background: selectedCustomer ? 'rgba(94, 188, 126, 0.08)' : 'var(--glass-bg)',
                 border: '2px solid',
                 borderColor: selectedCustomer ? 'rgba(94, 188, 126, 0.4)' : 'var(--glass-border)',
                 borderRadius: '16px',
                 color: 'var(--text-primary)',
                 outline: 'none',
-                transition: 'all 0.3s ease',
-                WebkitAppearance: 'none',
-                appearance: 'none'
+                transition: 'all 0.3s ease'
               }}
               onFocus={(e) => {
                 e.target.style.borderColor = '#5ebc7e';
