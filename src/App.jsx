@@ -37,6 +37,7 @@ function AppContent() {
 }
 
 function App() {
+  console.log('App reloaded');
   return (
     <Router>
       <AppContent />

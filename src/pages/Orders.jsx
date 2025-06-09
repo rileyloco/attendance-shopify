@@ -9,14 +9,10 @@ function Orders() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [orderType, setOrderType] = useState('paid'); // 'paid' or 'free'
-  const [termConfig, setTermConfig] = useState({
-    term: '2',
-    block: 'A',
-    startDate: null,
-    endDate: null
-  });
 
-  const WEEKS_BEFORE = 5; // Fetch orders from 5 weeks before term start
+  // Term configuration (will come from console later)
+  const TERM_START_DATE = '2025-05-01';
+  const WEEKS_BEFORE = 5;
 
   // Fetch orders from database based on type
   async function fetchOrders() {
@@ -88,68 +84,22 @@ function Orders() {
     }
   }
 
-  // Load term configuration on mount
-  useEffect(() => {
-    loadTermConfiguration();
-  }, []);
-
   useEffect(() => {
     fetchOrders();
   }, [orderType]); // Refetch when order type changes
 
-  // Load term configuration from console_settings
-  async function loadTermConfiguration() {
-    try {
-      // First try to load from database
-      const { data, error } = await supabase
-        .from('console_settings')
-        .select('term, block, start_date, end_date')
-        .eq('id', 1)
-        .single();
-
-      if (error) {
-        console.error('Error loading term config from database:', error);
-        // Fall back to localStorage
-        const stored = localStorage.getItem('termSettings');
-        if (stored) {
-          const settings = JSON.parse(stored);
-          setTermConfig({
-            term: settings.term || '2',
-            block: settings.block || 'A',
-            startDate: settings.startDate || null,
-            endDate: settings.endDate || null
-          });
-        }
-      } else if (data) {
-        setTermConfig({
-          term: data.term || '2',
-          block: data.block || 'A',
-          startDate: data.start_date || null,
-          endDate: data.end_date || null
-        });
-      }
-    } catch (err) {
-      console.error('Error loading term configuration:', err);
-    }
-  }
-
   // Parse date from variant title (e.g., "27th May" -> "2025-05-27")
   function parseClassDate(variantTitle) {
-    console.log('parseClassDate input:', variantTitle);
-    
     if (!variantTitle) return null;
     
     // Extract date pattern like "27th May", "3rd June", etc.
     const dateMatch = variantTitle.match(/(\d{1,2})(st|nd|rd|th)\s+(\w+)/);
     if (!dateMatch) {
-      console.log('No date match found');
       return null;
     }
     
     const day = parseInt(dateMatch[1]);
     const monthName = dateMatch[3];
-    
-    console.log('Extracted:', { day, monthName });
     
     // Month mapping
     const months = {
@@ -158,13 +108,12 @@ function Orders() {
       'September': '09', 'October': '10', 'November': '11', 'December': '12',
       // Short versions
       'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
-      'Jun': '06', 'Jul': '07', 'Aug': '08',
+      'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
       'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
     };
     
     const month = months[monthName];
     if (!month) {
-      console.log('Month not found:', monthName);
       return null;
     }
     
@@ -172,39 +121,20 @@ function Orders() {
     const year = new Date().getFullYear();
     const result = `${year}-${month}-${day.toString().padStart(2, '0')}`;
     
-    console.log('parseClassDate output:', result);
-    
     return result;
   }
 
   // Parse Shopify orders into database format
   function parseOrderData(shopifyOrders) {
-    // Build dynamic term/block patterns based on current configuration
-    const currentTermBlock = `term ${termConfig.term}${termConfig.block.toLowerCase()}`; // e.g., "term 2b"
-    const currentTermOnly = `term ${termConfig.term}`; // e.g., "term 2" (for bundles)
     const allResults = [];
-    
-    console.log(`Parsing orders for Term ${termConfig.term} Block ${termConfig.block}`);
-    console.log(`Looking for patterns: "${currentTermBlock}" or bundles with "${currentTermOnly}"`);
+    let totalFreeOrders = 0;
+    let filteredOutFreeOrders = 0;
     
     shopifyOrders.forEach(order => {
       const results = [];
       const roleClasses = {}; // Group by role
       const soloClasses = []; // Body Movement & Shines (no role)
       const freeClasses = []; // Free classes
-      
-      // Log customer being processed if it's Princess Uchendu
-      if (order.customer?.first_name?.toLowerCase() === 'princess' && 
-          order.customer?.last_name?.toLowerCase() === 'uchendu') {
-        console.log('Processing order for Princess Uchendu:', {
-          orderId: order.id,
-          customerName: `${order.customer.first_name} ${order.customer.last_name}`,
-          lineItems: order.line_items.map(item => ({
-            title: item.title,
-            variant: item.variant_title
-          }))
-        });
-      }
       
       order.line_items.forEach(item => {
         const title = item.title.toLowerCase();
@@ -221,19 +151,30 @@ function Orders() {
           const classDate = parseClassDate(item.variant_title);
           
           if (classDate) {
-            const freeOrder = {
-              order_id: order.id,
-              customer_id: order.customer?.id || null,
-              class_date: classDate,
-              class: 'Free Class - New York Salsa',
-              role: role,
-              paid: false,
-              notes: order.note || ''
-            };
-            console.log('Creating free order for customer', order.customer?.id, 'on date', classDate);
-            freeClasses.push(freeOrder);
+            totalFreeOrders++;
+            
+            // Check if the class date is within the last 2 weeks
+            const today = new Date();
+            const twoWeeksAgo = new Date(today);
+            twoWeeksAgo.setDate(today.getDate() - 14); // 2 weeks = 14 days
+            
+            const classDateObj = new Date(classDate + 'T00:00:00');
+            
+            if (classDateObj >= twoWeeksAgo) {
+              const freeOrder = {
+                order_id: order.id,
+                customer_id: order.customer?.id || null,
+                class_date: classDate,
+                class: 'Free Class - New York Salsa',
+                role: role,
+                paid: false,
+                notes: order.note || ''
+              };
+              freeClasses.push(freeOrder);
+            } else {
+              filteredOutFreeOrders++;
+            }
           } else {
-            console.log('Failed to parse date from free class variant:', item.variant_title);
           }
           return;
         }
@@ -241,37 +182,26 @@ function Orders() {
         // Skip one class pass
         if (title.includes('one class pass')) return;
         
-        // DYNAMIC TERM FILTERING
+        // STRICT TERM 2 FILTERING
         // Skip if not a term class
         if (!variant.includes('term')) return;
         
-        // Skip if it's not the current term
-        if (!variant.includes(currentTermOnly)) {
-          console.log(`Skipping non-Term ${termConfig.term} order:`, variant);
+        // Skip if it's Term 1 or Term 3
+        if (variant.includes('term 1') || variant.includes('term 3')) {
+          console.log('Skipping non-Term 2 order:', variant);
           return;
         }
         
-        // For specific classes (not bundles), must match exact term+block
-        const isBundleVariant = variant.includes('unlimited') || variant.includes('platinum');
-        if (!isBundleVariant) {
-          // More precise block checking - ensure we're not accidentally matching wrong blocks
-          const blockPatterns = {
-            'A': ['term ' + termConfig.term + 'a', 'block a'],
-            'B': ['term ' + termConfig.term + 'b', 'block b']
-          };
-          
-          const currentBlockPatterns = blockPatterns[termConfig.block] || [];
-          const hasCorrectBlock = currentBlockPatterns.some(pattern => variant.includes(pattern));
-          
-          // Also check for wrong block patterns to explicitly exclude them
-          const wrongBlock = termConfig.block === 'A' ? 'B' : 'A';
-          const wrongBlockPatterns = blockPatterns[wrongBlock] || [];
-          const hasWrongBlock = wrongBlockPatterns.some(pattern => variant.includes(pattern));
-          
-          if (hasWrongBlock || !hasCorrectBlock) {
-            console.log(`Skipping order with wrong block - variant: "${variant}", looking for block ${termConfig.block}`);
-            return;
-          }
+        // Skip if it's Term 2a (we want Term 2b now)
+        if (variant.includes('term 2a')) {
+          console.log('Skipping Term 2a order:', variant);
+          return;
+        }
+        
+        // Only accept Term 2 or Term 2b
+        if (!variant.includes('term 2')) {
+          console.log('Skipping non-Term 2 order:', variant);
+          return;
         }
         
         // Extract class name for paid classes - NO LEVEL 4
@@ -338,6 +268,12 @@ function Orders() {
       allResults.push(...results);
     });
     
+    // Log free orders statistics
+    console.log(`Free Orders Stats:`);
+    console.log(`1) Total free orders found: ${totalFreeOrders}`);
+    console.log(`2) Free orders filtered out (older than 2 weeks): ${filteredOutFreeOrders}`);
+    console.log(`3) Free orders to be inserted: ${totalFreeOrders - filteredOutFreeOrders}`);
+    
     return allResults;
   }
 
@@ -369,8 +305,8 @@ function Orders() {
       
       // Filter orders by type AND payment status
       const ordersToProcess = type === 'paid' 
-        ? parsedOrders.filter(o => !('class_date' in o) && o.paid === true)
-        : parsedOrders.filter(o => 'class_date' in o);
+        ? parsedOrders.filter(o => !o.hasOwnProperty('class_date') && o.paid === true)
+        : parsedOrders.filter(o => o.hasOwnProperty('class_date'));
       
       if (ordersToProcess.length === 0) {
         console.log(`No ${type} orders to process for attendance`);
@@ -388,13 +324,6 @@ function Orders() {
       }
       
       console.log(`Found ${existingAttendance?.length || 0} existing ${type} attendance records`);
-      if (type === 'free' && existingAttendance?.length > 0) {
-        console.log('Sample existing free attendance records:', existingAttendance.slice(0, 5));
-        // Log the actual dates in the database
-        existingAttendance.slice(0, 5).forEach(record => {
-          console.log(`DB Record - Customer: ${record.customer_id}, Date: ${record.class_date}, Role: ${record.role}`);
-        });
-      }
       
       // Create a Set of existing combinations
       const existingKeys = new Set(
@@ -430,8 +359,8 @@ function Orders() {
               customer_id: order.customer_id,
               class_name: className,
               role: order.role || '',
-              term: `Term ${termConfig.term}`,
-              block: termConfig.block,
+              term: 'Term 2', // Default values
+              block: 'B',
               week_1: false,
               week_2: false,
               week_3: false,
@@ -444,11 +373,8 @@ function Orders() {
           // Free attendance
           const key = `${order.customer_id}-${order.class_date}-${order.role || ''}`;
           
-          console.log('Checking free attendance key:', key, 'against existing keys');
-          
           // Skip if this combination already exists in DB or in our batch
           if (existingKeys.has(key) || seenKeys.has(key)) {
-            console.log('Skipping duplicate free attendance:', key);
             continue;
           }
           
@@ -461,8 +387,6 @@ function Orders() {
             class_date: order.class_date,
             attended: false
           };
-          console.log('Creating new free attendance record:', newRecord);
-          console.log('Order class_date type:', typeof order.class_date, 'value:', order.class_date);
           newAttendanceRecords.push(newRecord);
         }
       }
@@ -493,25 +417,14 @@ function Orders() {
 
   // Sync orders from Shopify
   async function syncFromShopify() {
-    if (!termConfig.startDate) {
-      setMessage('Error: No term start date configured. Please set it in Console.');
-      return;
-    }
-
     setLoading(true);
     setMessage('Fetching orders from Shopify...');
 
     try {
-      // Calculate date range based on block
-      // Block A: 5 weeks before block start (for new term orders)
-      // Block B: 10 weeks before block start (to catch orders from term beginning)
-      const weeksToGoBack = termConfig.block === 'A' ? WEEKS_BEFORE : WEEKS_BEFORE * 2;
-      
-      const startDate = new Date(termConfig.startDate);
-      startDate.setDate(startDate.getDate() - (weeksToGoBack * 7));
+      // Calculate date range (5 weeks before term start)
+      const startDate = new Date(TERM_START_DATE);
+      startDate.setDate(startDate.getDate() - (WEEKS_BEFORE * 7));
       const sinceDate = startDate.toISOString();
-      
-      console.log(`Fetching orders since ${sinceDate} for Term ${termConfig.term} Block ${termConfig.block}`);
 
       // Fetch from Shopify via Netlify function
       const response = await fetch('/.netlify/functions/shopify-orders', {
@@ -536,7 +449,7 @@ function Orders() {
       const allParsedOrders = parseOrderData(shopifyOrders);
       
       // Process PAID orders
-      const paidOrders = allParsedOrders.filter(o => !('class_date' in o));
+      const paidOrders = allParsedOrders.filter(o => !o.hasOwnProperty('class_date'));
       console.log(`Parsed into ${paidOrders.length} paid order records`);
       
       if (paidOrders.length > 0) {
@@ -565,9 +478,8 @@ function Orders() {
       }
       
       // Process FREE orders
-      const freeOrders = allParsedOrders.filter(o => 'class_date' in o);
+      const freeOrders = allParsedOrders.filter(o => o.hasOwnProperty('class_date'));
       console.log(`Parsed into ${freeOrders.length} free order records`);
-      console.log('Free orders details:', freeOrders); // Debug log
       
       if (freeOrders.length > 0) {
         setMessage(`Processing free orders...`);
@@ -696,7 +608,6 @@ function Orders() {
           }}
         />
         <button
-          className="sync-button"
           onClick={syncFromShopify}
           disabled={loading}
           style={{
@@ -726,7 +637,7 @@ function Orders() {
       </div>
       
       {/* Order Type Selection */}
-      <div style={{ marginBottom: '3rem' }}>
+      <div style={{ marginBottom: '2rem' }}>
         <select
           value={orderType}
           onChange={(e) => setOrderType(e.target.value)}

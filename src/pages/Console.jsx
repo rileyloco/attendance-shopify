@@ -816,42 +816,31 @@ function Console() {
  // Delete paid attendance
  async function deletePaidAttendance() {
    setLoading(true);
-   setMessage('Deleting paid attendance...');
+   setMessage('Deleting ALL paid attendance records...');
    
    try {
-     // First try to get records to see if query works
-     const { data: records, error: selectError } = await supabase
+     // Get count first for feedback
+     const { count } = await supabase
        .from('paid_attendance')
-       .select('*')
-       .eq('term', `Term ${term}`)
-       .eq('block', block);
+       .select('*', { count: 'exact', head: true });
 
-     if (selectError) {
-       console.error('Error selecting attendance:', selectError);
-       setMessage('Failed to access attendance data');
-       setLoading(false);
-       hideConfirmationModal();
-       return;
-     }
+     console.log(`Found ${count || 0} paid attendance records to delete`);
 
-     console.log(`Found ${records?.length || 0} records to delete`);
-
-     if (records && records.length > 0) {
-       // Delete all paid attendance for this term and block
+     if (count && count > 0) {
+       // Delete ALL paid attendance records
        const { error } = await supabase
          .from('paid_attendance')
          .delete()
-         .eq('term', `Term ${term}`)
-         .eq('block', block);
+         .gte('id', 0); // This ensures we delete all records
 
        if (error) {
          console.error('Error deleting attendance:', error);
          setMessage(`Failed to delete attendance data: ${error.message}`);
        } else {
-         setMessage(`Successfully deleted ${records.length} paid attendance records for Term ${term} Block ${block}`);
+         setMessage(`Successfully deleted ${count} paid attendance records`);
        }
      } else {
-       setMessage(`No attendance records found for Term ${term} Block ${block}`);
+       setMessage(`No paid attendance records found`);
      }
    } catch (err) {
      console.error('Delete error:', err);
@@ -1304,7 +1293,7 @@ function Console() {
                e.currentTarget.style.background = 'rgba(232, 93, 47, 0.2)';
              }}
            >
-             Delete Paid Attendance
+             Delete ALL Paid Attendance
            </button>
            
            <button
@@ -1334,7 +1323,7 @@ function Console() {
                e.currentTarget.style.background = 'rgba(232, 93, 47, 0.2)';
              }}
            >
-             Delete Free Attendance
+             Delete ALL Free Attendance
            </button>
          </div>
        </div>
@@ -1620,8 +1609,8 @@ function Console() {
            WebkitTextFillColor: 'transparent',
            backgroundClip: 'text'
          }}>
-           {deleteType === 'attendance' ? 'Delete Paid Attendance?' : 
-            deleteType === 'free_attendance' ? 'Delete Free Attendance?' : 
+           {deleteType === 'attendance' ? 'Delete ALL Paid Attendance?' : 
+            deleteType === 'free_attendance' ? 'Delete ALL Free Attendance?' : 
             'Delete All Logs?'}
          </h2>
          
@@ -1632,7 +1621,7 @@ function Console() {
            lineHeight: '1.5'
          }}>
            {deleteType === 'attendance' 
-             ? `Are you sure you want to delete paid attendance for Term ${term} Block ${block}? This can't be undone!`
+             ? `Are you sure you want to delete ALL paid attendance records? This will remove attendance for all terms and blocks. This can't be undone!`
              : deleteType === 'free_attendance'
              ? `Are you sure you want to delete all free attendance records? This can't be undone!`
              : `Are you sure you want to delete all log entries? This can't be undone!`

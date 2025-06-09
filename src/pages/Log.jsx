@@ -590,99 +590,101 @@ function Log() {
       
       {/* Unlogged entries */}
       <div style={{ marginBottom: '3rem' }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
+        {/* Buttons above heading */}
+        <div className="log-buttons" style={{ 
+          display: 'flex', 
+          gap: '1rem',
+          marginBottom: '1.5rem',
+          justifyContent: 'flex-end'
+        }}>
+          <button
+            onClick={logSelectedRows}
+            disabled={loading || selectedRows.size === 0}
+            style={{
+              padding: '0.75rem 1.5rem',
+              background: selectedRows.size === 0 
+                ? 'var(--glass-bg)' 
+                : 'rgba(78, 205, 196, 0.2)',
+              color: selectedRows.size === 0 ? 'var(--text-secondary)' : 'var(--success)',
+              borderRadius: '14px',
+              fontWeight: '600',
+              cursor: selectedRows.size === 0 ? 'not-allowed' : 'pointer',
+              transition: 'all 0.3s ease',
+              border: selectedRows.size === 0 
+                ? '1px solid var(--glass-border)' 
+                : '1px solid rgba(78, 205, 196, 0.4)',
+              opacity: selectedRows.size === 0 ? 0.7 : 1,
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)'
+            }}
+            onMouseEnter={(e) => {
+              if (selectedRows.size > 0) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 15px 35px rgba(78, 205, 196, 0.3)';
+                e.currentTarget.style.background = 'rgba(78, 205, 196, 0.3)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (selectedRows.size > 0) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+                e.currentTarget.style.background = 'rgba(78, 205, 196, 0.2)';
+              }
+            }}
+          >
+            Log Selected ({selectedRows.size})
+          </button>
+          <button
+            onClick={logAllUnlogged}
+            disabled={loading || unloggedEntries.length === 0}
+            style={{
+              padding: '0.75rem 1.5rem',
+              background: unloggedEntries.length === 0 
+                ? 'var(--glass-bg)' 
+                : 'rgba(232, 93, 47, 0.2)',
+              color: unloggedEntries.length === 0 ? 'var(--text-secondary)' : 'var(--accent-warm)',
+              borderRadius: '14px',
+              fontWeight: '600',
+              cursor: unloggedEntries.length === 0 ? 'not-allowed' : 'pointer',
+              transition: 'all 0.3s ease',
+              border: unloggedEntries.length === 0 
+                ? '1px solid var(--glass-border)' 
+                : '1px solid rgba(232, 93, 47, 0.4)',
+              opacity: unloggedEntries.length === 0 ? 0.7 : 1,
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)'
+            }}
+            onMouseEnter={(e) => {
+              if (unloggedEntries.length > 0) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 15px 35px rgba(232, 93, 47, 0.3)';
+                e.currentTarget.style.background = 'rgba(232, 93, 47, 0.3)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (unloggedEntries.length > 0) {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+                e.currentTarget.style.background = 'rgba(232, 93, 47, 0.2)';
+              }
+            }}
+          >
+            Log All ({unloggedEntries.length})
+          </button>
+        </div>
+        
+        {/* Heading with full width */}
+        <h2 style={{
+          fontSize: '1.5rem',
+          fontWeight: '700',
+          background: 'linear-gradient(135deg, var(--accent-warm) 0%, var(--accent-gold) 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
           marginBottom: '1.5rem'
         }}>
-          <h2 style={{
-            fontSize: '1.5rem',
-            fontWeight: '700',
-            background: 'linear-gradient(135deg, var(--accent-warm) 0%, var(--accent-gold) 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text'
-          }}>
-            Unlogged Check-ins ({unloggedEntries.length})
-          </h2>
-          <div className="log-buttons" style={{ display: 'flex', gap: '1rem' }}>
-            <button
-              onClick={logSelectedRows}
-              disabled={loading || selectedRows.size === 0}
-              style={{
-                padding: '0.75rem 1.5rem',
-                background: selectedRows.size === 0 
-                  ? 'var(--glass-bg)' 
-                  : 'rgba(78, 205, 196, 0.2)',
-                color: selectedRows.size === 0 ? 'var(--text-secondary)' : 'var(--success)',
-                borderRadius: '14px',
-                fontWeight: '600',
-                cursor: selectedRows.size === 0 ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease',
-                border: selectedRows.size === 0 
-                  ? '1px solid var(--glass-border)' 
-                  : '1px solid rgba(78, 205, 196, 0.4)',
-                opacity: selectedRows.size === 0 ? 0.7 : 1,
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)'
-              }}
-              onMouseEnter={(e) => {
-                if (selectedRows.size > 0) {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 15px 35px rgba(78, 205, 196, 0.3)';
-                  e.currentTarget.style.background = 'rgba(78, 205, 196, 0.3)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (selectedRows.size > 0) {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = 'none';
-                  e.currentTarget.style.background = 'rgba(78, 205, 196, 0.2)';
-                }
-              }}
-            >
-              Log Selected ({selectedRows.size})
-            </button>
-            <button
-              onClick={logAllUnlogged}
-              disabled={loading || unloggedEntries.length === 0}
-              style={{
-                padding: '0.75rem 1.5rem',
-                background: unloggedEntries.length === 0 
-                  ? 'var(--glass-bg)' 
-                  : 'rgba(232, 93, 47, 0.2)',
-                color: unloggedEntries.length === 0 ? 'var(--text-secondary)' : 'var(--accent-warm)',
-                borderRadius: '14px',
-                fontWeight: '600',
-                cursor: unloggedEntries.length === 0 ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease',
-                border: unloggedEntries.length === 0 
-                  ? '1px solid var(--glass-border)' 
-                  : '1px solid rgba(232, 93, 47, 0.4)',
-                opacity: unloggedEntries.length === 0 ? 0.7 : 1,
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)'
-              }}
-              onMouseEnter={(e) => {
-                if (unloggedEntries.length > 0) {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 15px 35px rgba(232, 93, 47, 0.3)';
-                  e.currentTarget.style.background = 'rgba(232, 93, 47, 0.3)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (unloggedEntries.length > 0) {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = 'none';
-                  e.currentTarget.style.background = 'rgba(232, 93, 47, 0.2)';
-                }
-              }}
-            >
-              Log All ({unloggedEntries.length})
-            </button>
-          </div>
-        </div>
+          Unlogged Check-ins ({unloggedEntries.length})
+        </h2>
         <div style={{
           background: 'var(--glass-bg)',
           backdropFilter: 'blur(25px)',
