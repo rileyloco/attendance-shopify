@@ -24,75 +24,80 @@ function Customers() {
     setCustomers(data || []);
   }
 
-  async function handleCSVUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
+async function handleCSVUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async ({ data }) => {
-        const header = Object.keys(data[0] || {});
-        const needed = ['Customer ID', 'First Name', 'Last Name', 'Email'];
-        if (!needed.every((h) => header.includes(h))) {
-          alert(`CSV must contain: ${needed.join(', ')}`);
-          return;
-        }
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: async ({ data }) => {
+      const header = Object.keys(data[0] || {});
+      const needed = ['Customer ID', 'First Name', 'Last Name', 'Email'];
+      if (!needed.every((h) => header.includes(h))) {
+        alert(`CSV must contain: ${needed.join(', ')}`);
+        return;
+      }
 
-        // Fetch existing customer_ids
-        const { data: existingData, error: fetchError } = await supabase
+      // Map all valid rows (including existing customers for updates)
+      const rows = data
+        .map((r, index) => {
+          const customer_id = parseInt(r['Customer ID']?.trim().replace(/^'/, ''), 10);
+          const email = r['Email']?.trim().toLowerCase() || '';
+          const row = {
+            customer_id,
+            first_name: r['First Name']?.trim() || '',
+            last_name: r['Last Name']?.trim() || '',
+            email,
+          };
+          
+          // Log for debugging
+          if (isNaN(customer_id)) {
+            console.log(`Row ${index + 1} rejected:`, { row, reason: 'Invalid customer_id' });
+            return null;
+          } else if (!email) {
+            console.log(`Row ${index + 1} rejected:`, { row, reason: 'Missing email' });
+            return null;
+          }
+          
+          return row;
+        })
+        .filter(r => r !== null); // Remove invalid rows
+
+      console.log('Valid rows to upload/update:', rows);
+
+      if (!rows.length) {
+        alert('No valid customers to process.');
+        return;
+      }
+
+      // Use upsert with onConflict to update existing records
+      const { data: upsertedData, error } = await supabase
+        .from('customers')
+        .upsert(rows, { 
+          onConflict: 'customer_id',
+          returning: 'minimal' // Don't return all the data
+        });
+        
+      if (error) {
+        alert(`Error uploading customers: ${error.message}`);
+      } else {
+        // Count how many were new vs updated
+        const { data: existingData } = await supabase
           .from('customers')
           .select('customer_id');
-        if (fetchError) {
-          alert(`Error fetching existing customers: ${fetchError.message}`);
-          return;
-        }
-        const existingIds = new Set(existingData.map((row) => row.customer_id));
-
-        // Map and filter rows
-        const rows = data
-          .map((r, index) => {
-            const customer_id = parseInt(r['Customer ID']?.trim().replace(/^'/, ''), 10);
-            const email = r['Email']?.trim().toLowerCase() || '';
-            const row = {
-              customer_id,
-              first_name: r['First Name']?.trim() || '',
-              last_name: r['Last Name']?.trim() || '',
-              email,
-            };
-            // Log for debugging
-            if (isNaN(customer_id)) {
-              console.log(`Row ${index + 1} rejected:`, { row, reason: 'Invalid customer_id' });
-            } else if (!email) {
-              console.log(`Row ${index + 1} rejected:`, { row, reason: 'Missing email' });
-            } else if (existingIds.has(customer_id)) {
-              console.log(`Row ${index + 1} rejected:`, { row, reason: 'Duplicate customer_id' });
-            }
-            return row;
-          })
-          .filter((r) => !isNaN(r.customer_id) && r.email && !existingIds.has(r.customer_id));
-
-        console.log('Valid rows to upload:', rows);
-
-        if (!rows.length) {
-          alert('No new valid customers to add.');
-          return;
-        }
-
-        // Upsert to Supabase
-        const { error } = await supabase
-          .from('customers')
-          .upsert(rows, { onConflict: 'customer_id' });
-        if (error) {
-          alert(`Error uploading customers: ${error.message}`);
-        } else {
-          alert(`Successfully uploaded ${rows.length} customers!`);
-          fetchCustomers();
-        }
-      },
-      error: (err) => alert(`CSV parse error: ${err.message}`),
-    });
-  }
+        
+        const existingIds = new Set(existingData?.map(row => row.customer_id) || []);
+        const newCount = rows.filter(r => !existingIds.has(r.customer_id)).length;
+        const updateCount = rows.length - newCount;
+        
+        alert(`Successfully processed ${rows.length} customers!\n${newCount} new, ${updateCount} updated.`);
+        fetchCustomers();
+      }
+    },
+    error: (err) => alert(`CSV parse error: ${err.message}`),
+  });
+}
 
   const filteredCustomers = customers.filter((c) =>
     `${c.first_name} ${c.last_name} ${c.email}`.toLowerCase().includes(search.toLowerCase())
