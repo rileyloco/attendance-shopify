@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dance Academy Reports</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #1a1a1a;
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --accent: #e85d2f;
+            --accent-gold: #f4a261;
+            --success: #4ecdc4;
+            --error: #e85d2f;
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-gold) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .back-btn {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .back-btn:hover {
+            background: var(--border);
+            transform: translateX(-4px);
+        }
+
+        .reports-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        .report-panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .report-panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), var(--accent-gold));
+            opacity: 0.7;
+        }
+
+        .report-panel h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            color: var(--accent);
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        input[type="date"] {
+            padding: 0.5rem 1rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        button {
+            padding: 0.5rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: var(--accent);
+            color: white;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(232, 93, 47, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .secondary {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        .secondary:hover {
+            background: var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--bg-primary);
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .summary {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .summary h3 {
+            color: var(--success);
+            font-size: 1.5rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #data-storage {
+            display: none;
+        }
+
+        .status-message {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .status-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .status-error {
+            background: var(--error);
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Reports Dashboard</h1>
+            <a href="index.html" class="back-btn">
+                ← Back to Main
+            </a>
+        </div>
+        
+        <!-- Data Storage (Hidden) -->
+        <div id="data-storage">
+            <!-- This will store our fetched data -->
+        </div>
+
+        <div class="reports-grid">
+            <!-- Income Report Panel -->
+            <div class="report-panel">
+                <h2>Income Report</h2>
+                <div class="controls">
+                    <label>From Date:</label>
+                    <input type="date" id="income-from-date" value="2025-01-01">
+                    <button onclick="fetchDataAndRunIncomeReport()">
+                        Generate Report
+                    </button>
+                    <button class="secondary hidden" id="export-income-btn" onclick="exportTableToCSV('income-table', 'income_report_' + new Date().toISOString().split('T')[0] + '.csv')">
+                        Export to CSV
+                    </button>
+                    <button class="secondary hidden" id="reset-income-btn" onclick="resetIncomeReport()">
+                        Reset
+                    </button>
+                </div>
+                
+                <div id="income-results" class="hidden">
+                    <table id="income-table">
+                        <thead>
+                            <tr>
+                                <th>Order #</th>
+                                <th>Date</th>
+                                <th>Customer ID</th>
+                                <th>Items</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    
+                    <div class="summary">
+                        <div>
+                            <strong>Total Orders:</strong> <span id="total-orders">0</span>
+                        </div>
+                        <div>
+                            <h3>Total Income: $<span id="total-income">0.00</span></h3>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="income-loading" class="loading hidden">
+                    Loading data from Shopify...
+                </div>
+            </div>
+
+            <!-- Term 2b Enrollments Report Panel -->
+            <div class="report-panel">
+                <h2>Term 2b Enrollments</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                    All Term 2b enrollments including Platinum/Unlimited bundles
+                </p>
+                <div class="controls">
+                    <button onclick="runTerm2bReport()">
+                        Generate Report
+                    </button>
+                    <button class="secondary hidden" id="export-term2b-btn" onclick="exportTableToCSV('term2b-table', 'term2b_enrollments_' + new Date().toISOString().split('T')[0] + '.csv')">
+                        Export to CSV
+                    </button>
+                    <button class="secondary hidden" id="reset-term2b-btn" onclick="resetTerm2bReport()">
+                        Reset
+                    </button>
+                </div>
+                
+                <div id="term2b-results" class="hidden">
+                    <table id="term2b-table">
+                        <thead>
+                            <tr>
+                                <th>Customer Name</th>
+                                <th>Email</th>
+                                <th>Classes</th>
+                                <th>Role</th>
+                                <th>Order Date</th>
+                                <th>Amount</th>
+                                <th>Order #</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    
+                    <div class="summary">
+                        <div>
+                            <strong>Total Enrollments:</strong> <span id="total-term2b">0</span>
+                        </div>
+                        <div>
+                            <strong>Unique Students:</strong> <span id="unique-students">0</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="term2b-loading" class="loading hidden">
+                    Loading data from Shopify and Supabase...
+                </div>
+            </div>
+
+            <!-- Enrollment Timing Analysis Report Panel -->
+            <div class="report-panel">
+                <h2>Enrollment Timing Analysis</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                    Analyze when students sign up for Term 2b classes relative to class start date (June 10th)
+                </p>
+                <div class="controls">
+                    <button onclick="runEnrollmentTimingReport()">
+                        Generate Report
+                    </button>
+                    <button class="secondary hidden" id="export-timing-btn" onclick="exportTableToCSV('timing-table', 'enrollment_timing_' + new Date().toISOString().split('T')[0] + '.csv')">
+                        Export to CSV
+                    </button>
+                    <button class="secondary hidden" id="reset-timing-btn" onclick="resetTimingReport()">
+                        Reset
+                    </button>
+                </div>
+                
+                <div id="timing-results" class="hidden">
+                    <table id="timing-table">
+                        <thead>
+                            <tr>
+                                <th>Class Level</th>
+                                <th>Early Enrollments</th>
+                                <th>Day-of Enrollments</th>
+                                <th>Total</th>
+                                <th>% Day-of</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    
+                    <div class="summary" style="flex-direction: column; align-items: flex-start; gap: 1rem;">
+                        <div style="display: flex; justify-content: space-between; width: 100%;">
+                            <div>
+                                <strong>Total Enrollments:</strong> <span id="total-timing-enrollments">0</span>
+                            </div>
+                            <div>
+                                <strong>Average Days Early:</strong> <span id="avg-days-early">0</span> days
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; width: 100%;">
+                            <div>
+                                <strong>Most Popular Enrollment Day:</strong> <span id="popular-day">-</span>
+                            </div>
+                            <div>
+                                <strong>Total Enrollments:</strong> <span id="popular-day-count">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="timing-breakdown" class="summary" style="margin-top: 1rem;">
+                        <div style="width: 100%;">
+                            <h3 style="font-size: 1.2rem; margin-bottom: 0.5rem;">Role Breakdown</h3>
+                            <div id="role-breakdown-content"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="timing-loading" class="loading hidden">
+                    Loading enrollment data...
+                </div>
+            </div>
+
+            <!-- More report panels will be added here -->
+        </div>
+    </div>
+
+    <script>
+        // Global data storage
+        let globalData = {
+            orders: [],
+            customers: {},
+            lastFetch: null
+        };
+
+        // Generic CSV Export Function
+        function exportTableToCSV(tableId, filename) {
+            const table = document.getElementById(tableId);
+            let csv = [];
+            
+            // Get all rows from the table
+            const rows = table.querySelectorAll('tr');
+            
+            for (let i = 0; i < rows.length; i++) {
+                const row = [], cols = rows[i].querySelectorAll('td, th');
+                
+                for (let j = 0; j < cols.length; j++) {
+                    // Get the text content and escape quotes
+                    let data = cols[j].innerText.replace(/"/g, '""');
+                    // Wrap in quotes if contains comma, newline or quotes
+                    if (data.search(/("|,|\n)/g) >= 0) {
+                        data = `"${data}"`;
+                    }
+                    row.push(data);
+                }
+                
+                csv.push(row.join(','));
+            }
+            
+            // Add summary data if exists
+            const summaryData = getSummaryDataForReport(tableId);
+            if (summaryData) {
+                csv.push(''); // Empty row
+                csv.push('SUMMARY');
+                summaryData.forEach(item => {
+                    csv.push(item);
+                });
+            }
+            
+            // Download CSV file
+            const csvContent = csv.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            
+            if (navigator.msSaveBlob) { // IE 10+
+                navigator.msSaveBlob(blob, filename);
+            } else {
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+            
+            showStatus(`Exported ${filename}`, true);
+        }
+
+        // Get summary data based on report type
+        function getSummaryDataForReport(tableId) {
+            switch(tableId) {
+                case 'income-table':
+                    if (globalData.lastReport && globalData.lastReport.type === 'income') {
+                        return [
+                            `Total Orders,${globalData.lastReport.summary.totalOrders}`,
+                            `Total Income,$${globalData.lastReport.summary.totalIncome.toFixed(2)}`
+                        ];
+                    }
+                    break;
+                case 'term2b-table':
+                    if (globalData.lastReport && globalData.lastReport.type === 'term2b') {
+                        return [
+                            `Total Enrollments,${globalData.lastReport.data.enrollments.length}`,
+                            `Unique Students,${globalData.lastReport.data.uniqueStudents}`
+                        ];
+                    }
+                    break;
+                case 'timing-table':
+                    if (globalData.lastReport && globalData.lastReport.type === 'enrollmentTiming') {
+                        return [
+                            `Total Enrollments,${globalData.lastReport.data.totalEnrollments}`,
+                            `Average Days Early,${globalData.lastReport.data.avgDaysEarly}`,
+                            `Most Popular Day,${globalData.lastReport.data.mostPopularDay ? new Date(globalData.lastReport.data.mostPopularDay).toLocaleDateString('en-AU') : 'N/A'}`,
+                            `Enrollments on Popular Day,${globalData.lastReport.data.mostPopularDayCount}`
+                        ];
+                    }
+                    break;
+            }
+            return null;
+        }
+
+        // Original data fetching function (kept safe)
+        async function fetchShopifyData() {
+            try {
+                const response = await fetch('/.netlify/functions/shopify-orders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        since: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString() // 6 months
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                globalData.orders = data.orders || [];
+                globalData.lastFetch = new Date();
+                
+                // Store in hidden div for reference
+                document.getElementById('data-storage').textContent = JSON.stringify(globalData);
+                
+                return globalData.orders;
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                throw error;
+            }
+        }
+
+
+        // Income Report Functions
+        async function fetchDataAndRunIncomeReport() {
+            const loadingDiv = document.getElementById('income-loading');
+            const resultsDiv = document.getElementById('income-results');
+            
+            loadingDiv.classList.remove('hidden');
+            resultsDiv.classList.add('hidden');
+            
+            try {
+                // Fetch fresh data from Shopify
+                await fetchShopifyData();
+                
+                // Run the income report
+                generateIncomeReport();
+                
+            } catch (error) {
+                alert('Error fetching data: ' + error.message);
+            } finally {
+                loadingDiv.classList.add('hidden');
+            }
+        }
+
+        function generateIncomeReport() {
+            const fromDate = new Date(document.getElementById('income-from-date').value);
+            const tbody = document.querySelector('#income-table tbody');
+            const resultsDiv = document.getElementById('income-results');
+            const exportBtn = document.getElementById('export-income-btn');
+            
+            // Clear previous results
+            tbody.innerHTML = '';
+            
+            // Filter orders by date
+            const filteredOrders = globalData.orders.filter(order => {
+                const orderDate = new Date(order.created_at);
+                return orderDate >= fromDate;
+            });
+            
+            // Sort by date (newest first)
+            filteredOrders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            
+            let totalIncome = 0;
+            
+            // Build table rows
+            filteredOrders.forEach(order => {
+                const row = document.createElement('tr');
+                const orderDate = new Date(order.created_at);
+                const amount = parseFloat(order.total_price);
+                totalIncome += amount;
+                
+                // Get item names
+                const items = order.line_items.map(item => item.title).join(', ');
+                
+                row.innerHTML = `
+                    <td>${order.name}</td>
+                    <td>${orderDate.toLocaleDateString('en-AU')}</td>
+                    <td>${order.customer?.id || 'Guest'}</td>
+                    <td>${items}</td>
+                    <td>$${amount.toFixed(2)}</td>
+                    <td>${order.financial_status}</td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+            
+            // Update summary
+            document.getElementById('total-orders').textContent = filteredOrders.length;
+            document.getElementById('total-income').textContent = totalIncome.toFixed(2);
+            
+            // Show results and export/reset buttons
+            resultsDiv.classList.remove('hidden');
+            exportBtn.classList.remove('hidden');
+            document.getElementById('reset-income-btn').classList.remove('hidden');
+            
+            // Store filtered data for export
+            globalData.lastReport = {
+                type: 'income',
+                fromDate: fromDate.toISOString(),
+                orders: filteredOrders,
+                summary: {
+                    totalOrders: filteredOrders.length,
+                    totalIncome: totalIncome
+                }
+            };
+        }
+
+        // Debug function to check specific customer data
+        window.debugCustomer = function(customerId) {
+            if (!globalData.orders || globalData.orders.length === 0) {
+                console.log('No orders loaded. Please run a report first.');
+                return;
+            }
+            
+            const orders = globalData.orders.filter(order => order.customer?.id == customerId);
+            console.log(`=== Debug for Customer ${customerId} ===`);
+            console.log(`Found ${orders.length} orders`);
+            
+            if (orders.length > 0) {
+                const firstOrder = orders[0];
+                console.log('Customer object from Shopify:', firstOrder.customer);
+                console.log('Billing address:', firstOrder.billing_address);
+                console.log('Shipping address:', firstOrder.shipping_address);
+                
+                // Check all orders for this customer
+                orders.forEach((order, index) => {
+                    console.log(`\nOrder ${index + 1} (${order.name}):`);
+                    console.log('- Customer data:', order.customer);
+                    console.log('- Has first_name:', !!order.customer?.first_name);
+                    console.log('- Has last_name:', !!order.customer?.last_name);
+                    console.log('- Has email:', !!order.customer?.email);
+                    console.log('- Billing first_name:', order.billing_address?.first_name);
+                    console.log('- Billing last_name:', order.billing_address?.last_name);
+                });
+            }
+            
+            // Also check what's in Supabase
+            if (window.globalData.customerMap && window.globalData.customerMap[customerId]) {
+                console.log('\nSupabase data:', window.globalData.customerMap[customerId]);
+            } else {
+                console.log('\nNo Supabase data found for this customer');
+            }
+        }
+
+        // Make globalData accessible for debugging
+        window.globalData = globalData;
+
+        // Modular Report System
+        const reportModules = {
+            term2b: {
+                name: "Term 2b Enrollments",
+                description: "All Term 2b enrollments including Platinum/Unlimited",
+                
+                // Filter function to identify Term 2b orders
+                filterOrders: (order) => {
+                    // Check each line item for Term 2b products
+                    return order.line_items.some(item => {
+                        const title = item.title?.toLowerCase() || '';
+                        const variant = item.variant_title?.toLowerCase() || '';
+                        
+                        // Direct Term 2b enrollment
+                        if (variant.includes('term 2b')) {
+                            return true;
+                        }
+                        
+                        // Platinum/Unlimited bundles that include Term 2
+                        if ((title.includes('platinum') || title.includes('unlimited')) && 
+                            variant.includes('term 2')) {
+                            return true;
+                        }
+                        
+                        return false;
+                    });
+                },
+                
+                // Extract relevant line items from an order
+                extractEnrollments: (order) => {
+                    const enrollments = [];
+                    
+                    order.line_items.forEach(item => {
+                        const title = item.title?.toLowerCase() || '';
+                        const variant = item.variant_title?.toLowerCase() || '';
+                        
+                        // Check if this is a Term 2b item
+                        const isTerm2b = variant.includes('term 2b');
+                        const isPlatinum = (title.includes('platinum') || title.includes('unlimited')) && 
+                                          variant.includes('term 2');
+                        
+                        if (isTerm2b || isPlatinum) {
+                            // Extract class name
+                            let className = item.title;
+                            if (title.includes('level 1')) className = 'Level 1';
+                            else if (title.includes('level 2')) className = 'Level 2';
+                            else if (title.includes('level 3')) className = 'Level 3';
+                            else if (title.includes('body movement')) className = 'Body Movement';
+                            else if (title.includes('shines')) className = 'Shines';
+                            else if (title.includes('platinum')) className = 'Platinum Bundle (All Classes)';
+                            else if (title.includes('unlimited')) className = 'Unlimited Bundle (All Classes)';
+                            
+                            // Extract role
+                            let role = 'N/A';
+                            if (variant.includes('leader')) role = 'Leader';
+                            else if (variant.includes('follower')) role = 'Follower';
+                            
+                            enrollments.push({
+                                className,
+                                role,
+                                price: item.price,
+                                originalTitle: item.title,
+                                variantTitle: item.variant_title
+                            });
+                        }
+                    });
+                    
+                    return enrollments;
+                },
+                
+                // Transform data for display
+                transformData: (orders, customerMap) => {
+                    const results = [];
+                    const uniqueCustomers = new Set();
+                    
+                    orders.forEach(order => {
+                        const enrollments = reportModules.term2b.extractEnrollments(order);
+                        if (enrollments.length === 0) return;
+                        
+                        const customerId = order.customer?.id;
+                        const customer = customerMap[customerId] || {};
+                        
+                        uniqueCustomers.add(customerId);
+                        
+                        // Group enrollments by role
+                        const enrollmentsByRole = {};
+                        enrollments.forEach(enrollment => {
+                            if (!enrollmentsByRole[enrollment.role]) {
+                                enrollmentsByRole[enrollment.role] = [];
+                            }
+                            enrollmentsByRole[enrollment.role].push(enrollment);
+                        });
+                        
+                        // Create a row for each role
+                        Object.entries(enrollmentsByRole).forEach(([role, roleEnrollments]) => {
+                            const classes = roleEnrollments.map(e => e.className).join(', ');
+                            const totalAmount = roleEnrollments.reduce((sum, e) => sum + parseFloat(e.price), 0);
+                            
+                            // Get customer name with fallback options
+                            let customerName = 'Unknown';
+                            
+                            // First try Supabase data
+                            if (customer.first_name || customer.last_name) {
+                                customerName = `${customer.first_name || ''} ${customer.last_name || ''}`.trim();
+                            } 
+                            // Then try Shopify customer data
+                            else if (order.customer?.first_name || order.customer?.last_name) {
+                                customerName = `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim();
+                                console.log(`Using Shopify data for customer ${customerId}: ${customerName}`);
+                            }
+                            // Try billing address
+                            else if (order.billing_address?.first_name || order.billing_address?.last_name) {
+                                customerName = `${order.billing_address.first_name || ''} ${order.billing_address.last_name || ''}`.trim();
+                                console.log(`Using billing address for customer ${customerId}: ${customerName}`);
+                            }
+                            
+                            // Log if still unknown
+                            if (customerName === 'Unknown' || customerName === '') {
+                                console.log(`Unknown customer ${customerId} - Order ${order.name}`);
+                                console.log('Customer data:', order.customer);
+                                console.log('Billing address:', order.billing_address);
+                                customerName = 'Unknown';
+                            }
+                            
+                            results.push({
+                                customerName,
+                                email: customer.email || order.customer?.email || order.billing_address?.email || 'No email',
+                                classes,
+                                role,
+                                orderDate: order.created_at,
+                                amount: totalAmount,
+                                orderNumber: order.name,
+                                customerId
+                            });
+                        });
+                    });
+                    
+                    return {
+                        enrollments: results,
+                        uniqueStudents: uniqueCustomers.size
+                    };
+                }
+            }
+        };
+
+        // Fetch customer data from Supabase
+        async function fetchCustomerData(customerIds) {
+            try {
+                const response = await fetch('/.netlify/functions/supabase-customers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ customerIds })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                return data.customerMap || {};
+            } catch (error) {
+                console.error('Error fetching customer data:', error);
+                return {};
+            }
+        }
+
+        // Term 2b Report Functions
+        async function runTerm2bReport() {
+            const loadingDiv = document.getElementById('term2b-loading');
+            const resultsDiv = document.getElementById('term2b-results');
+            const exportBtn = document.getElementById('export-term2b-btn');
+            
+            loadingDiv.classList.remove('hidden');
+            resultsDiv.classList.add('hidden');
+            
+            try {
+                // Fetch fresh data from Shopify
+                await fetchShopifyData();
+                
+                // Filter Term 2b orders
+                const term2bOrders = globalData.orders.filter(reportModules.term2b.filterOrders);
+                
+                // Get unique customer IDs
+                const customerIds = [...new Set(term2bOrders
+                    .map(order => order.customer?.id)
+                    .filter(id => id))];
+                
+                // Fetch customer data from Supabase
+                const customerMap = await fetchCustomerData(customerIds);
+                globalData.customerMap = customerMap; // Store for debugging
+                
+                // Transform data
+                const reportData = reportModules.term2b.transformData(term2bOrders, customerMap);
+                
+                // Display results
+                displayTerm2bResults(reportData);
+                
+                // Store for export
+                globalData.lastReport = {
+                    type: 'term2b',
+                    data: reportData,
+                    generatedAt: new Date()
+                };
+                
+                resultsDiv.classList.remove('hidden');
+                exportBtn.classList.remove('hidden');
+                document.getElementById('reset-term2b-btn').classList.remove('hidden');
+                
+            } catch (error) {
+                alert('Error generating report: ' + error.message);
+            } finally {
+                loadingDiv.classList.add('hidden');
+            }
+        }
+
+        function displayTerm2bResults(reportData) {
+            const tbody = document.querySelector('#term2b-table tbody');
+            tbody.innerHTML = '';
+            
+            // Sort by customer name
+            reportData.enrollments.sort((a, b) => a.customerName.localeCompare(b.customerName));
+            
+            reportData.enrollments.forEach(enrollment => {
+                const row = document.createElement('tr');
+                const orderDate = new Date(enrollment.orderDate);
+                
+                row.innerHTML = `
+                    <td>${enrollment.customerName}</td>
+                    <td>${enrollment.email}</td>
+                    <td>${enrollment.classes}</td>
+                    <td>${enrollment.role}</td>
+                    <td>${orderDate.toLocaleDateString('en-AU')}</td>
+                    <td>${enrollment.amount.toFixed(2)}</td>
+                    <td>${enrollment.orderNumber}</td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+            
+            // Update summary
+            document.getElementById('total-term2b').textContent = reportData.enrollments.length;
+            document.getElementById('unique-students').textContent = reportData.uniqueStudents;
+        }
+
+
+        // Show status message
+        function showStatus(message, isSuccess = true) {
+            const statusDiv = document.createElement('div');
+            statusDiv.className = `status-message ${isSuccess ? 'status-success' : 'status-error'}`;
+            statusDiv.textContent = message;
+            document.body.appendChild(statusDiv);
+            
+            setTimeout(() => {
+                statusDiv.style.opacity = '0';
+                setTimeout(() => statusDiv.remove(), 300);
+            }, 3000);
+        }
+
+        // Enrollment Timing Analysis Functions
+        async function runEnrollmentTimingReport() {
+            const loadingDiv = document.getElementById('timing-loading');
+            const resultsDiv = document.getElementById('timing-results');
+            const exportBtn = document.getElementById('export-timing-btn');
+            
+            loadingDiv.classList.remove('hidden');
+            resultsDiv.classList.add('hidden');
+            
+            try {
+                // Fetch fresh data from Shopify if needed
+                if (!globalData.orders || globalData.orders.length === 0) {
+                    await fetchShopifyData();
+                }
+                
+                // Define date ranges for 2025
+                const classStartDate = new Date('2025-06-10'); // June 10th, 2025
+                const earlyStartDate = new Date('2025-05-20'); // May 20th, 2025
+                const earlyEndDate = new Date('2025-06-09'); // June 9th, 2025
+                
+                // First, find ALL orders that contain Term 2b enrollments (excluding bundles)
+                const term2bOrders = globalData.orders.filter(order => {
+                    return order.line_items.some(item => {
+                        const title = item.title?.toLowerCase() || '';
+                        const variant = item.variant_title?.toLowerCase() || '';
+                        
+                        // Skip bundles
+                        if (title.includes('platinum') || title.includes('unlimited')) {
+                            return false;
+                        }
+                        
+                        // Check if it's a Term 2b Level 1/2/3 class
+                        const isTerm2b = variant.includes('term 2b');
+                        const isLevelClass = title.includes('level 1') || 
+                                           title.includes('level 2') || 
+                                           title.includes('level 3');
+                        
+                        return isTerm2b && isLevelClass;
+                    });
+                });
+                
+                console.log(`Found ${term2bOrders.length} orders with Term 2b enrollments`);
+                
+                // Debug: Show some sample orders
+                if (term2bOrders.length > 0) {
+                    console.log('Sample Term 2b orders:');
+                    term2bOrders.slice(0, 3).forEach(order => {
+                        console.log(`- Order ${order.name} placed on ${new Date(order.created_at).toLocaleDateString()}`);
+                        order.line_items.forEach(item => {
+                            if (item.variant_title?.toLowerCase().includes('term 2b') && 
+                                !item.title?.toLowerCase().includes('platinum') && 
+                                !item.title?.toLowerCase().includes('unlimited')) {
+                                console.log(`  - ${item.title} (${item.variant_title})`);
+                            }
+                        });
+                    });
+                }
+                
+                // Analyze enrollments
+                const enrollmentData = analyzeEnrollmentTiming(term2bOrders, classStartDate, earlyStartDate);
+                
+                // Debug: Show analysis results
+                console.log('Enrollment timing analysis results:');
+                console.log(`- Total enrollments found: ${enrollmentData.totalEnrollments}`);
+                console.log(`- By Level:`, enrollmentData.byLevel);
+                console.log(`- Most popular day: ${enrollmentData.mostPopularDay} with ${enrollmentData.mostPopularDayCount} enrollments`);
+                console.log(`- Average days early: ${enrollmentData.avgDaysEarly}`);
+                
+                // Display results
+                displayEnrollmentTimingResults(enrollmentData);
+                
+                // Store for export
+                globalData.lastReport = {
+                    type: 'enrollmentTiming',
+                    data: enrollmentData,
+                    generatedAt: new Date(),
+                    dateRange: {
+                        earlyStart: earlyStartDate,
+                        earlyEnd: earlyEndDate,
+                        classStart: classStartDate
+                    }
+                };
+                
+                resultsDiv.classList.remove('hidden');
+                exportBtn.classList.remove('hidden');
+                document.getElementById('reset-timing-btn').classList.remove('hidden');
+                
+            } catch (error) {
+                alert('Error generating enrollment timing report: ' + error.message);
+            } finally {
+                loadingDiv.classList.add('hidden');
+            }
+        }
+
+        function analyzeEnrollmentTiming(orders, classStartDate, earlyStartDate) {
+            const enrollments = [];
+            const enrollmentsByDay = {};
+            const enrollmentsByLevel = {
+                'Level 1': { early: 0, dayOf: 0 },
+                'Level 2': { early: 0, dayOf: 0 },
+                'Level 3': { early: 0, dayOf: 0 }
+            };
+            const roleBreakdown = {
+                early: { Leader: 0, Follower: 0 },
+                dayOf: { Leader: 0, Follower: 0 }
+            };
+            
+            // Process each order
+            orders.forEach(order => {
+                const orderDate = new Date(order.created_at);
+                const dayKey = orderDate.toISOString().split('T')[0];
+                
+                // Check if it's day-of enrollment (same date as class start)
+                const orderDateStr = orderDate.toDateString();
+                const classStartStr = classStartDate.toDateString();
+                const isDayOf = orderDateStr === classStartStr;
+                
+                // Check if it's in the early enrollment period
+                const isEarly = orderDate >= earlyStartDate && orderDate < classStartDate;
+                
+                // Calculate days before class
+                const daysBeforeClass = Math.floor((classStartDate - orderDate) / (1000 * 60 * 60 * 24));
+                
+                // Process line items for Term 2b Level 1/2/3 classes
+                order.line_items.forEach(item => {
+                    const title = item.title?.toLowerCase() || '';
+                    const variant = item.variant_title?.toLowerCase() || '';
+                    
+                    // Skip bundles
+                    if (title.includes('platinum') || title.includes('unlimited')) {
+                        return;
+                    }
+                    
+                    // Check if it's a Term 2b class
+                    if (variant.includes('term 2b')) {
+                        let level = null;
+                        let role = null;
+                        
+                        // Determine class level
+                        if (title.includes('level 1')) level = 'Level 1';
+                        else if (title.includes('level 2')) level = 'Level 2';
+                        else if (title.includes('level 3')) level = 'Level 3';
+                        
+                        // Skip if not a level class
+                        if (!level) return;
+                        
+                        // Determine role
+                        if (variant.includes('leader')) role = 'Leader';
+                        else if (variant.includes('follower')) role = 'Follower';
+                        
+                        // Create enrollment record
+                        enrollments.push({
+                            orderId: order.id,
+                            orderNumber: order.name,
+                            customerName: `${order.customer?.first_name || ''} ${order.customer?.last_name || ''}`.trim(),
+                            level: level,
+                            role: role,
+                            orderDate: orderDate,
+                            daysBeforeClass: daysBeforeClass,
+                            isDayOf: isDayOf,
+                            isEarly: isEarly
+                        });
+                        
+                        // Only count if it's either day-of or in the early period
+                        if (isDayOf || isEarly) {
+                            // Track enrollments by day
+                            if (!enrollmentsByDay[dayKey]) {
+                                enrollmentsByDay[dayKey] = 0;
+                            }
+                            enrollmentsByDay[dayKey]++;
+                            
+                            // Update level counts
+                            if (isDayOf) {
+                                enrollmentsByLevel[level].dayOf++;
+                                if (role) roleBreakdown.dayOf[role]++;
+                            } else if (isEarly) {
+                                enrollmentsByLevel[level].early++;
+                                if (role) roleBreakdown.early[role]++;
+                            }
+                        }
+                    }
+                });
+            });
+            
+            // Find most popular enrollment day (only within the date range)
+            let mostPopularDay = null;
+            let maxEnrollments = 0;
+            Object.entries(enrollmentsByDay).forEach(([day, count]) => {
+                const dayDate = new Date(day);
+                // Only consider days within our analysis period
+                if (dayDate >= earlyStartDate && dayDate <= classStartDate) {
+                    if (count > maxEnrollments) {
+                        maxEnrollments = count;
+                        mostPopularDay = day;
+                    }
+                }
+            });
+            
+            // Calculate average days early (only for early enrollments)
+            const earlyEnrollments = enrollments.filter(e => e.isEarly && !e.isDayOf);
+            const avgDaysEarly = earlyEnrollments.length > 0
+                ? (earlyEnrollments.reduce((sum, e) => sum + Math.max(0, e.daysBeforeClass), 0) / earlyEnrollments.length).toFixed(1)
+                : 0;
+            
+            return {
+                enrollments: enrollments,
+                byLevel: enrollmentsByLevel,
+                byDay: enrollmentsByDay,
+                roleBreakdown: roleBreakdown,
+                mostPopularDay: mostPopularDay,
+                mostPopularDayCount: maxEnrollments,
+                avgDaysEarly: avgDaysEarly,
+                totalEnrollments: enrollments.length
+            };
+        }
+
+        function displayEnrollmentTimingResults(data) {
+            const tbody = document.querySelector('#timing-table tbody');
+            tbody.innerHTML = '';
+            
+            let totalEarly = 0;
+            let totalDayOf = 0;
+            
+            // Build table rows for each level
+            ['Level 1', 'Level 2', 'Level 3'].forEach(level => {
+                const levelData = data.byLevel[level];
+                const total = levelData.early + levelData.dayOf;
+                const percentDayOf = total > 0 ? ((levelData.dayOf / total) * 100).toFixed(1) : '0.0';
+                
+                totalEarly += levelData.early;
+                totalDayOf += levelData.dayOf;
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${level}</td>
+                    <td>${levelData.early}</td>
+                    <td>${levelData.dayOf}</td>
+                    <td>${total}</td>
+                    <td>${percentDayOf}%</td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            // Add totals row
+            const totalRow = document.createElement('tr');
+            totalRow.style.fontWeight = 'bold';
+            totalRow.style.borderTop = '2px solid var(--border)';
+            const grandTotal = totalEarly + totalDayOf;
+            const totalPercentDayOf = grandTotal > 0 ? ((totalDayOf / grandTotal) * 100).toFixed(1) : '0.0';
+            
+            totalRow.innerHTML = `
+                <td>Total</td>
+                <td>${totalEarly}</td>
+                <td>${totalDayOf}</td>
+                <td>${grandTotal}</td>
+                <td>${totalPercentDayOf}%</td>
+            `;
+            tbody.appendChild(totalRow);
+            
+            // Update summary stats
+            document.getElementById('total-timing-enrollments').textContent = data.totalEnrollments;
+            document.getElementById('avg-days-early').textContent = data.avgDaysEarly;
+            
+            // Format most popular day
+            if (data.mostPopularDay) {
+                const popularDate = new Date(data.mostPopularDay);
+                document.getElementById('popular-day').textContent = popularDate.toLocaleDateString('en-AU', { 
+                    weekday: 'short', 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+                document.getElementById('popular-day-count').textContent = data.mostPopularDayCount;
+            }
+            
+            // Display role breakdown
+            const roleBreakdownDiv = document.getElementById('role-breakdown-content');
+            roleBreakdownDiv.innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 0.5rem;">
+                    <div>
+                        <strong style="color: var(--accent);">Early Enrollments:</strong><br>
+                        Leaders: ${data.roleBreakdown.early.Leader}<br>
+                        Followers: ${data.roleBreakdown.early.Follower}
+                    </div>
+                    <div>
+                        <strong style="color: var(--accent);">Day-of Enrollments:</strong><br>
+                        Leaders: ${data.roleBreakdown.dayOf.Leader}<br>
+                        Followers: ${data.roleBreakdown.dayOf.Follower}
+                    </div>
+                    <div>
+                        <strong style="color: var(--accent);">Total by Role:</strong><br>
+                        Leaders: ${data.roleBreakdown.early.Leader + data.roleBreakdown.dayOf.Leader}<br>
+                        Followers: ${data.roleBreakdown.early.Follower + data.roleBreakdown.dayOf.Follower}
+                    </div>
+                </div>
+            `;
+        }
+
+
+        // Reset functions for each report
+        function resetIncomeReport() {
+            // Hide results and buttons
+            document.getElementById('income-results').classList.add('hidden');
+            document.getElementById('export-income-btn').classList.add('hidden');
+            document.getElementById('reset-income-btn').classList.add('hidden');
+            
+            // Clear table
+            document.querySelector('#income-table tbody').innerHTML = '';
+            
+            // Clear last report data
+            if (globalData.lastReport && globalData.lastReport.type === 'income') {
+                globalData.lastReport = null;
+            }
+        }
+
+        function resetTerm2bReport() {
+            // Hide results and buttons
+            document.getElementById('term2b-results').classList.add('hidden');
+            document.getElementById('export-term2b-btn').classList.add('hidden');
+            document.getElementById('reset-term2b-btn').classList.add('hidden');
+            
+            // Clear table
+            document.querySelector('#term2b-table tbody').innerHTML = '';
+            
+            // Clear last report data
+            if (globalData.lastReport && globalData.lastReport.type === 'term2b') {
+                globalData.lastReport = null;
+            }
+        }
+
+        function resetTimingReport() {
+            // Hide results and buttons
+            document.getElementById('timing-results').classList.add('hidden');
+            document.getElementById('export-timing-btn').classList.add('hidden');
+            document.getElementById('reset-timing-btn').classList.add('hidden');
+            
+            // Clear table
+            document.querySelector('#timing-table tbody').innerHTML = '';
+            
+            // Clear last report data
+            if (globalData.lastReport && globalData.lastReport.type === 'enrollmentTiming') {
+                globalData.lastReport = null;
+            }
+        }
+    </script>
+</body>
+</html>

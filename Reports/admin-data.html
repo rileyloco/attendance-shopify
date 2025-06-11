@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shopify Data Explorer - Admin</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #1a1a1a;
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --accent: #e85d2f;
+            --accent-gold: #f4a261;
+            --success: #4ecdc4;
+            --error: #e85d2f;
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--accent);
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+        }
+
+        .back-btn {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .back-btn:hover {
+            background: var(--border);
+            transform: translateX(-4px);
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: var(--accent);
+            color: white;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(232, 93, 47, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .secondary {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+        }
+
+        .status {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .status.success {
+            background: rgba(78, 205, 196, 0.1);
+            border: 1px solid rgba(78, 205, 196, 0.3);
+            color: var(--success);
+        }
+
+        .status.error {
+            background: rgba(232, 93, 47, 0.1);
+            border: 1px solid rgba(232, 93, 47, 0.3);
+            color: var(--error);
+        }
+
+        .data-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .data-section h2 {
+            margin-bottom: 1rem;
+            color: var(--accent);
+        }
+
+        pre {
+            background: var(--bg-primary);
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            max-height: 600px;
+            overflow-y: auto;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .warning {
+            background: rgba(232, 93, 47, 0.1);
+            border: 1px solid rgba(232, 93, 47, 0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>Shopify Data Explorer</h1>
+                <p class="subtitle">Admin Tool - Fetch and analyze raw Shopify data</p>
+            </div>
+            <a href="index.html" class="back-btn">
+                ← Back to Main
+            </a>
+        </div>
+        
+        <div class="warning">
+            ⚠️ Admin Only: This tool fetches all raw data from Shopify. Use for debugging and data structure analysis.
+        </div>
+
+        <div id="status-container"></div>
+        
+        <div class="controls">
+            <button onclick="fetchAllShopifyData()" id="fetch-all-btn">
+                Fetch ALL Shopify Data
+                <span id="loader" class="loading" style="display: none;"></span>
+            </button>
+            <button onclick="analyzeFields()" class="secondary">
+                Analyze Field Structure
+            </button>
+            <button onclick="exportRawData()" class="secondary">
+                Export Raw Data
+            </button>
+            <button onclick="clearAll()" class="secondary">
+                Clear All
+            </button>
+        </div>
+
+        <div id="data-container"></div>
+    </div>
+
+    <script>
+        // Global storage for all Shopify data
+        let shopifyData = {
+            orders: [],
+            products: [],
+            customers: [],
+            collections: [],
+            inventory: [],
+            transactions: [],
+            analytics: {},
+            raw_responses: {}
+        };
+
+        function showStatus(message, type = 'info') {
+            const container = document.getElementById('status-container');
+            container.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        function showLoader(show) {
+            document.getElementById('loader').style.display = show ? 'inline-block' : 'none';
+            document.getElementById('fetch-all-btn').disabled = show;
+        }
+
+        async function fetchAllShopifyData() {
+            showLoader(true);
+            showStatus('Starting to fetch ALL Shopify data...', 'info');
+            
+            const container = document.getElementById('data-container');
+            container.innerHTML = '';
+            
+            try {
+                // 1. FETCH ORDERS (with all fields)
+                showStatus('Fetching orders...', 'info');
+                const ordersResponse = await fetch('/.netlify/functions/shopify-orders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        since: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString() // 6 months
+                    })
+                });
+                
+                if (!ordersResponse.ok) throw new Error('Failed to fetch orders');
+                
+                const ordersData = await ordersResponse.json();
+                shopifyData.orders = ordersData.orders || [];
+                shopifyData.raw_responses.orders = ordersData;
+                
+                // Display orders summary
+                displayDataSection('Orders', {
+                    total_count: shopifyData.orders.length,
+                    sample: shopifyData.orders[0],
+                    all_fields: shopifyData.orders[0] ? Object.keys(shopifyData.orders[0]) : [],
+                    line_item_fields: shopifyData.orders[0]?.line_items?.[0] ? Object.keys(shopifyData.orders[0].line_items[0]) : [],
+                    customer_fields: shopifyData.orders[0]?.customer ? Object.keys(shopifyData.orders[0].customer) : [],
+                    first_5_orders: shopifyData.orders.slice(0, 5)
+                });
+                
+                // 2. EXTRACT PRODUCTS from orders
+                showStatus('Analyzing products from orders...', 'info');
+                const productMap = {};
+                shopifyData.orders.forEach(order => {
+                    order.line_items?.forEach(item => {
+                        if (!productMap[item.product_id]) {
+                            productMap[item.product_id] = {
+                                product_id: item.product_id,
+                                title: item.title,
+                                vendor: item.vendor,
+                                product_type: item.product_type,
+                                variants: {}
+                            };
+                        }
+                        if (item.variant_id && !productMap[item.product_id].variants[item.variant_id]) {
+                            productMap[item.product_id].variants[item.variant_id] = {
+                                variant_id: item.variant_id,
+                                variant_title: item.variant_title,
+                                sku: item.sku,
+                                price: item.price,
+                                grams: item.grams,
+                                requires_shipping: item.requires_shipping,
+                                taxable: item.taxable,
+                                fulfillment_service: item.fulfillment_service
+                            };
+                        }
+                    });
+                });
+                
+                shopifyData.products = Object.values(productMap);
+                
+                displayDataSection('Products (from orders)', {
+                    total_unique_products: shopifyData.products.length,
+                    sample: shopifyData.products[0],
+                    all_line_item_fields: shopifyData.orders[0]?.line_items?.[0] ? Object.keys(shopifyData.orders[0].line_items[0]) : [],
+                    first_5_products: shopifyData.products.slice(0, 5)
+                });
+                
+                // 3. EXTRACT CUSTOMERS
+                showStatus('Analyzing customers...', 'info');
+                const customerMap = {};
+                shopifyData.orders.forEach(order => {
+                    if (order.customer?.id) {
+                        customerMap[order.customer.id] = order.customer;
+                    }
+                });
+                shopifyData.customers = Object.values(customerMap);
+                
+                displayDataSection('Customers (from orders)', {
+                    total_unique_customers: shopifyData.customers.length,
+                    sample: shopifyData.customers[0],
+                    all_fields: shopifyData.customers[0] ? Object.keys(shopifyData.customers[0]) : [],
+                    first_5_customers: shopifyData.customers.slice(0, 5)
+                });
+                
+                // 4. FINANCIAL DATA
+                showStatus('Analyzing financial data...', 'info');
+                const financialSummary = {
+                    total_revenue: shopifyData.orders.reduce((sum, o) => sum + parseFloat(o.total_price || 0), 0),
+                    total_tax: shopifyData.orders.reduce((sum, o) => sum + parseFloat(o.total_tax || 0), 0),
+                    total_discounts: shopifyData.orders.reduce((sum, o) => sum + parseFloat(o.total_discounts || 0), 0),
+                    total_shipping: shopifyData.orders.reduce((sum, o) => sum + parseFloat(o.total_shipping_price_set?.shop_money?.amount || 0), 0),
+                    currencies: [...new Set(shopifyData.orders.map(o => o.currency))],
+                    payment_methods: [...new Set(shopifyData.orders.map(o => o.payment_gateway_names).flat())],
+                    financial_statuses: [...new Set(shopifyData.orders.map(o => o.financial_status))],
+                    fulfillment_statuses: [...new Set(shopifyData.orders.map(o => o.fulfillment_status))]
+                };
+                
+                displayDataSection('Financial Summary', financialSummary);
+                
+                // 5. Show all available fields
+                showStatus('Analyzing all fields...', 'info');
+                const allFields = {
+                    order_fields: shopifyData.orders[0] ? getAllFields(shopifyData.orders[0]) : [],
+                    line_item_fields: shopifyData.orders[0]?.line_items?.[0] ? getAllFields(shopifyData.orders[0].line_items[0]) : [],
+                    customer_fields: shopifyData.orders[0]?.customer ? getAllFields(shopifyData.orders[0].customer) : [],
+                    shipping_address_fields: shopifyData.orders[0]?.shipping_address ? getAllFields(shopifyData.orders[0].shipping_address) : [],
+                    billing_address_fields: shopifyData.orders[0]?.billing_address ? getAllFields(shopifyData.orders[0].billing_address) : []
+                };
+                
+                displayDataSection('All Available Fields', allFields);
+                
+                showStatus(`Successfully fetched ${shopifyData.orders.length} orders with complete field data!`, 'success');
+                
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+                console.error('Error fetching data:', error);
+            } finally {
+                showLoader(false);
+            }
+        }
+
+        function getAllFields(obj, prefix = '') {
+            let fields = [];
+            for (const key in obj) {
+                const fullKey = prefix ? `${prefix}.${key}` : key;
+                fields.push(fullKey);
+                if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+                    fields = fields.concat(getAllFields(obj[key], fullKey));
+                }
+            }
+            return fields;
+        }
+
+        function displayDataSection(title, data) {
+            const container = document.getElementById('data-container');
+            const section = document.createElement('div');
+            section.className = 'data-section';
+            section.innerHTML = `
+                <h2>${title}</h2>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+            container.appendChild(section);
+        }
+
+        function analyzeFields() {
+            if (shopifyData.orders.length === 0) {
+                showStatus('Please fetch data first!', 'error');
+                return;
+            }
+            
+            const container = document.getElementById('data-container');
+            container.innerHTML = '';
+            
+            // Deep field analysis
+            const fieldAnalysis = {
+                orders: analyzeObjectFields(shopifyData.orders),
+                products: analyzeObjectFields(shopifyData.products),
+                customers: analyzeObjectFields(shopifyData.customers),
+                sample_values: {
+                    order: shopifyData.orders[0],
+                    line_item: shopifyData.orders[0]?.line_items?.[0],
+                    customer: shopifyData.customers[0]
+                }
+            };
+            
+            displayDataSection('Deep Field Analysis', fieldAnalysis);
+        }
+
+        function analyzeObjectFields(array) {
+            if (!array || array.length === 0) return {};
+            
+            const fieldTypes = {};
+            const fieldExamples = {};
+            const fieldCounts = {};
+            
+            array.forEach(obj => {
+                analyzeObjectRecursive(obj, '', fieldTypes, fieldExamples, fieldCounts);
+            });
+            
+            return {
+                total_records: array.length,
+                fields: Object.keys(fieldTypes).map(field => ({
+                    name: field,
+                    type: fieldTypes[field],
+                    example: fieldExamples[field],
+                    non_null_count: fieldCounts[field],
+                    null_percentage: ((array.length - fieldCounts[field]) / array.length * 100).toFixed(2) + '%'
+                }))
+            };
+        }
+
+        function analyzeObjectRecursive(obj, prefix, fieldTypes, fieldExamples, fieldCounts) {
+            for (const key in obj) {
+                const fullKey = prefix ? `${prefix}.${key}` : key;
+                const value = obj[key];
+                
+                if (value !== null && value !== undefined) {
+                    fieldCounts[fullKey] = (fieldCounts[fullKey] || 0) + 1;
+                    
+                    if (!fieldTypes[fullKey]) {
+                        fieldTypes[fullKey] = Array.isArray(value) ? 'array' : typeof value;
+                        fieldExamples[fullKey] = value;
+                    }
+                    
+                    if (typeof value === 'object' && !Array.isArray(value) && value !== null) {
+                        analyzeObjectRecursive(value, fullKey, fieldTypes, fieldExamples, fieldCounts);
+                    }
+                }
+            }
+        }
+
+        function exportRawData() {
+            if (shopifyData.orders.length === 0) {
+                showStatus('No data to export!', 'error');
+                return;
+            }
+            
+            const exportData = {
+                export_date: new Date().toISOString(),
+                summary: {
+                    orders: shopifyData.orders.length,
+                    products: shopifyData.products.length,
+                    customers: shopifyData.customers.length
+                },
+                raw_data: shopifyData,
+                field_analysis: analyzeObjectFields(shopifyData.orders)
+            };
+            
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `shopify-complete-data-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showStatus('Data exported successfully!', 'success');
+        }
+
+        function clearAll() {
+            shopifyData = {
+                orders: [],
+                products: [],
+                customers: [],
+                collections: [],
+                inventory: [],
+                transactions: [],
+                analytics: {},
+                raw_responses: {}
+            };
+            document.getElementById('data-container').innerHTML = '';
+            showStatus('All data cleared', 'success');
+        }
+    </script>
+</body>
+</html>

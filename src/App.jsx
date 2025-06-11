@@ -8,6 +8,7 @@ import Log from './pages/Log';
 import Orders from './pages/Orders';
 import Console from './pages/Console';
 import Kiosk from './pages/Kiosk';
+import Reports from './pages/Reports';
 
 function AppContent() {
   const location = useLocation();
@@ -30,6 +31,7 @@ function AppContent() {
           <Route path="/orders" element={<Orders />} />
           <Route path="/console" element={<Console />} />
           <Route path="/kiosk" element={<Kiosk />} />
+          <Route path="/reports" element={<Reports />} />
         </Routes>
       </div>
     </>
