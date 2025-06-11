@@ -252,7 +252,10 @@ function Reports() {
       orders = await fetchShopifyOrders();
     }
 
-    const classStartDate = new Date('2025-06-10'); // Term 2b start date
+    // Different start dates for different classes
+    const level123StartDate = new Date('2025-06-10'); // Tuesday - Level 1, 2, 3
+    const bodyMovementShinesStartDate = new Date('2025-06-12'); // Thursday - Body Movement, Shines
+    
     const timingData = {
       byClass: {},
       byDayOfWeek: {},
@@ -270,12 +273,10 @@ function Reports() {
         if (!variant.includes('term 2b')) return;
         if (title.includes('free class') || title.includes('one class pass')) return;
         
-        // Calculate days before class start
-        const daysBeforeStart = Math.floor((classStartDate - orderDate) / (1000 * 60 * 60 * 24));
-        const dayOfWeek = orderDate.toLocaleDateString('en-US', { weekday: 'long' });
-        
         // Determine class level
         let classLevel = '';
+        let classStartDate = level123StartDate; // Default to Tuesday start
+        
         if (title.includes('unlimited bundle') || title.includes('platinum bundle')) {
           classLevel = 'Bundle';
         } else if (title.includes('level 1')) {
@@ -286,11 +287,17 @@ function Reports() {
           classLevel = 'Level 3';
         } else if (title.includes('body movement')) {
           classLevel = 'Body Movement';
+          classStartDate = bodyMovementShinesStartDate; // Thursday start
         } else if (title.includes('shines')) {
           classLevel = 'Shines';
+          classStartDate = bodyMovementShinesStartDate; // Thursday start
         }
 
         if (classLevel) {
+          // Calculate days before the appropriate class start date
+          const daysBeforeStart = Math.floor((classStartDate - orderDate) / (1000 * 60 * 60 * 24));
+          const dayOfWeek = orderDate.toLocaleDateString('en-US', { weekday: 'long' });
+          
           // Initialize class data if needed
           if (!timingData.byClass[classLevel]) {
             timingData.byClass[classLevel] = {
@@ -300,11 +307,16 @@ function Reports() {
             };
           }
 
-          // Categorize enrollment
-          if (daysBeforeStart > 0) {
+          // Categorize enrollment - day-of means same date as class start
+          const isOrderDateSameAsClassStart = orderDate.toDateString() === classStartDate.toDateString();
+          
+          if (isOrderDateSameAsClassStart) {
+            timingData.byClass[classLevel].dayOf++;
+          } else if (daysBeforeStart > 0) {
             timingData.byClass[classLevel].early++;
           } else {
-            timingData.byClass[classLevel].dayOf++;
+            // After class start - count as early (negative days before)
+            timingData.byClass[classLevel].early++;
           }
           timingData.byClass[classLevel].total++;
 
@@ -316,7 +328,8 @@ function Reports() {
             classLevel,
             daysBeforeStart,
             dayOfWeek,
-            orderDate: orderDate.toISOString()
+            orderDate: orderDate.toISOString(),
+            classStartDate: classStartDate.toISOString()
           });
         }
       });
@@ -942,15 +955,17 @@ function Reports() {
   }, []);
 
   return (
-    <div style={{ padding: '4rem 0' }}>
+    <div style={{ padding: '2rem 0' }}>
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '3rem'
+        marginBottom: '2rem',
+        flexWrap: 'wrap',
+        gap: '1rem'
       }}>
         <h1 style={{
-          fontSize: '3rem',
+          fontSize: 'clamp(2rem, 5vw, 3rem)',
           fontWeight: '800',
           background: 'linear-gradient(135deg, var(--accent-coral) 0%, var(--accent-gold) 100%)',
           WebkitBackgroundClip: 'text',
@@ -971,7 +986,8 @@ function Reports() {
             transition: 'all 0.3s ease',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '0.5rem'
+            gap: '0.5rem',
+            fontSize: '0.9rem'
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = 'var(--glass-bg)';
@@ -993,7 +1009,7 @@ function Reports() {
         WebkitBackdropFilter: 'blur(25px)',
         border: '1px solid var(--glass-border)',
         borderRadius: '28px',
-        padding: '2rem',
+        padding: '1.5rem',
         marginBottom: '2rem',
         position: 'relative',
         overflow: 'hidden'
@@ -1010,7 +1026,7 @@ function Reports() {
         }}></div>
         
         <h2 style={{
-          fontSize: '1.8rem',
+          fontSize: 'clamp(1.3rem, 3vw, 1.8rem)',
           fontWeight: '700',
           marginBottom: '1.5rem',
           color: 'var(--accent-coral)'
@@ -1020,12 +1036,12 @@ function Reports() {
         
         <div style={{
           display: 'flex',
-          gap: '1rem',
+          gap: '0.75rem',
           marginBottom: '1.5rem',
           alignItems: 'center',
           flexWrap: 'wrap'
         }}>
-          <label style={{ color: 'var(--text-secondary)' }}>From Date:</label>
+          <label style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>From Date:</label>
           <input
             type="date"
             id="income-from-date"
@@ -1035,15 +1051,16 @@ function Reports() {
               border: '1px solid var(--glass-border)',
               borderRadius: '6px',
               color: 'var(--text-primary)',
-              fontSize: '1rem',
-              outline: 'none'
+              fontSize: '0.9rem',
+              outline: 'none',
+              maxWidth: '200px'
             }}
           />
           <button
             onClick={generateIncomeReport}
             disabled={incomeLoading}
             style={{
-              padding: '0.5rem 1.5rem',
+              padding: '0.5rem 1rem',
               background: 'var(--accent-coral)',
               color: 'white',
               border: 'none',
@@ -1051,7 +1068,8 @@ function Reports() {
               fontWeight: '600',
               cursor: incomeLoading ? 'not-allowed' : 'pointer',
               opacity: incomeLoading ? 0.5 : 1,
-              transition: 'all 0.3s ease'
+              transition: 'all 0.3s ease',
+              fontSize: '0.9rem'
             }}
           >
             Generate Report
@@ -1061,14 +1079,15 @@ function Reports() {
               <button
                 onClick={() => exportToCSV('income')}
                 style={{
-                  padding: '0.5rem 1.5rem',
+                  padding: '0.5rem 1rem',
                   background: 'transparent',
                   border: '1px solid var(--glass-border)',
                   color: 'var(--text-primary)',
                   borderRadius: '6px',
                   fontWeight: '600',
                   cursor: 'pointer',
-                  transition: 'all 0.3s ease'
+                  transition: 'all 0.3s ease',
+                  fontSize: '0.9rem'
                 }}
               >
                 Export to CSV
@@ -1076,14 +1095,15 @@ function Reports() {
               <button
                 onClick={resetIncomeReport}
                 style={{
-                  padding: '0.5rem 1.5rem',
+                  padding: '0.5rem 1rem',
                   background: 'transparent',
                   border: '1px solid var(--glass-border)',
                   color: 'var(--text-primary)',
                   borderRadius: '6px',
                   fontWeight: '600',
                   cursor: 'pointer',
-                  transition: 'all 0.3s ease'
+                  transition: 'all 0.3s ease',
+                  fontSize: '0.9rem'
                 }}
               >
                 Reset
@@ -1100,10 +1120,11 @@ function Reports() {
         
         {incomeReport && (
           <div>
+            <div style={{ overflowX: 'auto', marginTop: '1rem' }}>
             <table style={{
               width: '100%',
               borderCollapse: 'collapse',
-              marginTop: '1rem'
+              minWidth: '600px'
             }}>
               <thead>
                 <tr>
@@ -1190,6 +1211,7 @@ function Reports() {
                 ))}
               </tbody>
             </table>
+            </div>
             
             <div style={{
               marginTop: '1.5rem',
@@ -1198,7 +1220,9 @@ function Reports() {
               borderRadius: '8px',
               display: 'flex',
               justifyContent: 'space-between',
-              alignItems: 'center'
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '1rem'
             }}>
               <div>
                 <strong>Total Orders:</strong> {incomeReport.summary.totalOrders}
@@ -1223,7 +1247,7 @@ function Reports() {
         WebkitBackdropFilter: 'blur(25px)',
         border: '1px solid var(--glass-border)',
         borderRadius: '28px',
-        padding: '2rem',
+        padding: '1.5rem',
         marginBottom: '2rem',
         position: 'relative',
         overflow: 'hidden'
@@ -1240,7 +1264,7 @@ function Reports() {
         }}></div>
         
         <h2 style={{
-          fontSize: '1.8rem',
+          fontSize: 'clamp(1.3rem, 3vw, 1.8rem)',
           fontWeight: '700',
           marginBottom: '0.5rem',
           color: 'var(--accent-gold)'
@@ -1319,10 +1343,11 @@ function Reports() {
         
         {term2bReport && (
           <div>
+            <div style={{ overflowX: 'auto', marginTop: '1rem' }}>
             <table style={{
               width: '100%',
               borderCollapse: 'collapse',
-              marginTop: '1rem'
+              minWidth: '600px'
             }}>
               <thead>
                 <tr>
@@ -1420,6 +1445,7 @@ function Reports() {
                 ))}
               </tbody>
             </table>
+            </div>
             
             <div style={{
               marginTop: '1.5rem',
@@ -1428,7 +1454,9 @@ function Reports() {
               borderRadius: '8px',
               display: 'flex',
               justifyContent: 'space-between',
-              alignItems: 'center'
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '1rem'
             }}>
               <div>
                 <strong>Total Enrollments:</strong> {term2bReport.data.enrollments.length}
@@ -1448,7 +1476,7 @@ function Reports() {
         WebkitBackdropFilter: 'blur(25px)',
         border: '1px solid var(--glass-border)',
         borderRadius: '28px',
-        padding: '2rem',
+        padding: '1.5rem',
         marginBottom: '2rem',
         position: 'relative',
         overflow: 'hidden'
@@ -1465,7 +1493,7 @@ function Reports() {
         }}></div>
         
         <h2 style={{
-          fontSize: '1.8rem',
+          fontSize: 'clamp(1.3rem, 3vw, 1.8rem)',
           fontWeight: '700',
           marginBottom: '0.5rem',
           color: 'var(--accent-teal)'
@@ -1473,7 +1501,9 @@ function Reports() {
           Enrollment Timing Analysis
         </h2>
         <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-          Analyze when students sign up for Term 2b classes relative to class start date (June 10th)
+          Analyze when students sign up for Term 2b classes relative to class start dates:
+          <br />• Level 1/2/3: Tuesday, June 10th
+          <br />• Body Movement & Shines: Thursday, June 12th
         </p>
         
         <div style={{
@@ -1544,10 +1574,11 @@ function Reports() {
         
         {timingReport && (
           <div>
+            <div style={{ overflowX: 'auto', marginTop: '1rem' }}>
             <table style={{
               width: '100%',
               borderCollapse: 'collapse',
-              marginTop: '1rem'
+              minWidth: '600px'
             }}>
               <thead>
                 <tr>
@@ -1626,6 +1657,7 @@ function Reports() {
                 })}
               </tbody>
             </table>
+            </div>
             
             <div style={{
               marginTop: '1.5rem',
@@ -1660,7 +1692,7 @@ function Reports() {
         WebkitBackdropFilter: 'blur(25px)',
         border: '1px solid var(--glass-border)',
         borderRadius: '28px',
-        padding: '2rem',
+        padding: '1.5rem',
         position: 'relative',
         overflow: 'hidden'
       }}>
@@ -1676,7 +1708,7 @@ function Reports() {
         }}></div>
         
         <h2 style={{
-          fontSize: '1.8rem',
+          fontSize: 'clamp(1.3rem, 3vw, 1.8rem)',
           fontWeight: '700',
           marginBottom: '0.5rem',
           color: 'var(--accent-warm)'
@@ -1812,7 +1844,7 @@ function Reports() {
                   <table style={{
                     width: '100%',
                     borderCollapse: 'collapse',
-                    minWidth: '800px'
+                    minWidth: '600px'
                   }}>
                     <thead>
                       <tr>
