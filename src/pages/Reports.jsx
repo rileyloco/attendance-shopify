@@ -2,11 +2,10 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
 function Reports() {
-  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   
   // Global data storage
-  const [globalData, setGlobalData] = useState({
+  const [globalData] = useState({
     orders: [],
     customers: {},
     lastFetch: null
@@ -14,21 +13,56 @@ function Reports() {
 
   // Report states
   const [incomeReport, setIncomeReport] = useState(null);
-  const [term2bReport, setTerm2bReport] = useState(null);
   const [timingReport, setTimingReport] = useState(null);
   const [enrollmentAnalysis, setEnrollmentAnalysis] = useState(null);
 
   // Show/hide states for buttons
   const [showIncomeButtons, setShowIncomeButtons] = useState(false);
-  const [showTerm2bButtons, setShowTerm2bButtons] = useState(false);
   const [showTimingButtons, setShowTimingButtons] = useState(false);
   const [showAnalysisButtons, setShowAnalysisButtons] = useState(false);
 
   // Loading states for each report
   const [incomeLoading, setIncomeLoading] = useState(false);
-  const [term2bLoading, setTerm2bLoading] = useState(false);
   const [timingLoading, setTimingLoading] = useState(false);
   const [analysisLoading, setAnalysisLoading] = useState(false);
+
+  // Income report filters
+  const [manualFromDate, setManualFromDate] = useState('');
+  const [manualToDate, setManualToDate] = useState('');
+  
+  // State for Term Enrollments Report
+  const [enrollmentClassFilter, setEnrollmentClassFilter] = useState('all');
+  const [enrollmentTermFilter, setEnrollmentTermFilter] = useState('2');
+  const [enrollmentBlockFilter, setEnrollmentBlockFilter] = useState('both');
+  const [termEnrollmentsReport, setTermEnrollmentsReport] = useState(null);
+  const [termEnrollmentsLoading, setTermEnrollmentsLoading] = useState(false);
+  const [showTermEnrollmentsButtons, setShowTermEnrollmentsButtons] = useState(false);
+  
+  // State for Social Attendees Report
+  const [socialAttendeesReport, setSocialAttendeesReport] = useState(null);
+  const [socialAttendeesLoading, setSocialAttendeesLoading] = useState(false);
+  const [showSocialAttendeesButtons, setShowSocialAttendeesButtons] = useState(false);
+
+  // Term schedule for 2025 - these dates are for reference only
+  // In term mode, we filter by the term/block in the product variant, not order date
+  const TERM_SCHEDULE_2025 = {
+    '1': {
+      'A': { start: '2025-02-03', end: '2025-03-07' },
+      'B': { start: '2025-03-10', end: '2025-04-11' }
+    },
+    '2': {
+      'A': { start: '2025-05-05', end: '2025-06-06' },
+      'B': { start: '2025-06-10', end: '2025-07-11' }
+    },
+    '3': {
+      'A': { start: '2025-07-28', end: '2025-08-29' },
+      'B': { start: '2025-09-01', end: '2025-10-03' }
+    },
+    '4': {
+      'A': { start: '2025-10-20', end: '2025-11-21' },
+      'B': { start: '2025-11-24', end: '2025-12-19' }
+    }
+  };
 
   // Fetch Shopify orders
   async function fetchShopifyOrders(fromDate = null) {
@@ -82,164 +116,841 @@ function Reports() {
   }
 
   // Show status message
-  function showStatus(msg, isSuccess = true) {
+  function showStatus(msg) {
     setMessage(msg);
     setTimeout(() => setMessage(''), 3000);
+  }
+
+  // Parse date from variant title (e.g., "27th May" -> "2025-05-27")
+  function parseClassDate(variantTitle) {
+    if (!variantTitle) return null;
+    
+    // Extract date pattern like "27th May", "3rd June", etc.
+    const dateMatch = variantTitle.match(/(\d{1,2})(st|nd|rd|th)\s+(\w+)/);
+    if (!dateMatch) {
+      return null;
+    }
+    
+    const day = parseInt(dateMatch[1]);
+    const monthName = dateMatch[3];
+    
+    // Month mapping
+    const months = {
+      'January': '01', 'February': '02', 'March': '03', 'April': '04',
+      'May': '05', 'June': '06', 'July': '07', 'August': '08',
+      'September': '09', 'October': '10', 'November': '11', 'December': '12',
+      // Short versions
+      'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+      'Jun': '06', 'Jul': '07', 'Aug': '08',
+      'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+    };
+    
+    const month = months[monthName];
+    if (!month) {
+      return null;
+    }
+    
+    // Simply format as YYYY-MM-DD string without using Date object
+    const year = new Date().getFullYear();
+    const result = `${year}-${month}-${day.toString().padStart(2, '0')}`;
+    
+    return result;
+  }
+
+  // Get date range based on mode
+  function getDateRange() {
+    if (dateMode === 'manual') {
+      return {
+        from: manualFromDate ? new Date(manualFromDate) : null,
+        to: manualToDate ? new Date(manualToDate) : new Date()
+      };
+    } else {
+      // Term mode
+      const schedule = TERM_SCHEDULE_2025[selectedTerm];
+      if (!schedule) return { from: null, to: null };
+      
+      if (selectedBlock === 'both') {
+        return {
+          from: new Date(schedule['A'].start),
+          to: new Date(schedule['B'].end)
+        };
+      } else {
+        return {
+          from: new Date(schedule[selectedBlock].start),
+          to: new Date(schedule[selectedBlock].end)
+        };
+      }
+    }
+  }
+
+  // Filter and process orders by class type and term/block
+  function filterAndProcessOrdersByClassTypeAndTerm(orders, classType, termFilter = null) {
+    const processedOrders = [];
+    
+    orders.forEach(order => {
+      // First filter by term/block if in term mode
+      let itemsAfterTermFilter = order.line_items;
+      
+      if (termFilter) {
+        itemsAfterTermFilter = order.line_items.filter(item => {
+          const variant = (item.variant_title || '').toLowerCase();
+          const title = item.title.toLowerCase();
+          
+          // Special handling for free classes - they have dates, not terms
+          if (title.includes('free class')) {
+            const classDate = parseClassDate(item.variant_title);
+            if (!classDate) return false;
+            
+            // Get term dates from TERM_SCHEDULE_2025
+            const termKey = `term${termFilter.term}`;
+            const termData = TERM_SCHEDULE_2025[termKey];
+            if (!termData) return false;
+            
+            // Check which block period the class date falls in
+            const classDateObj = new Date(classDate + 'T00:00:00');
+            
+            if (termFilter.block === 'both') {
+              // Check if date is in either block A or B
+              const blockAStart = new Date(termData.blockA.start + 'T00:00:00');
+              const blockAEnd = new Date(termData.blockA.end + 'T00:00:00');
+              const blockBStart = new Date(termData.blockB.start + 'T00:00:00');
+              const blockBEnd = new Date(termData.blockB.end + 'T00:00:00');
+              
+              return (classDateObj >= blockAStart && classDateObj <= blockAEnd) ||
+                     (classDateObj >= blockBStart && classDateObj <= blockBEnd);
+            } else {
+              // Check specific block
+              const blockKey = `block${termFilter.block}`;
+              const blockData = termData[blockKey];
+              if (!blockData) return false;
+              
+              const blockStart = new Date(blockData.start + 'T00:00:00');
+              const blockEnd = new Date(blockData.end + 'T00:00:00');
+              
+              return classDateObj >= blockStart && classDateObj <= blockEnd;
+            }
+          }
+          
+          // Regular term-based filtering for other products
+          // Extract term and block from variant
+          let itemTerm = null;
+          let itemBlock = null;
+          
+          // Check for term patterns
+          const termMatch = variant.match(/term (\d+)([ab]?)/);
+          if (termMatch) {
+            itemTerm = termMatch[1];
+            itemBlock = termMatch[2] ? termMatch[2].toUpperCase() : null;
+            
+            // If variant says "term 2" without block, it's both blocks
+            if (!itemBlock && variant.includes(`term ${itemTerm}`) && !variant.includes(`term ${itemTerm}a`) && !variant.includes(`term ${itemTerm}b`)) {
+              itemBlock = 'both';
+            }
+          }
+          
+          // Skip items without term info (unless they're free classes which we already handled)
+          if (!itemTerm) return false;
+          
+          // Filter based on term/block
+          if (termFilter.term !== itemTerm) return false;
+          
+          if (termFilter.block === 'both') {
+            // Include items for block A, B, or both
+            return true;
+          } else {
+            // Must match specific block or be for both blocks
+            return itemBlock === termFilter.block || itemBlock === 'both';
+          }
+        });
+      }
+      
+      // Then filter by class type
+      const filteredItems = itemsAfterTermFilter.filter(item => {
+        const title = item.title.toLowerCase();
+        
+        // For 'all', include only recognized dance classes and products
+        if (classType === 'all') {
+          return title.includes('level 1') || 
+                 title.includes('level 2') || 
+                 title.includes('level 3') || 
+                 (title.includes('body movement') && title.includes('open')) || 
+                 title.includes('shines') || 
+                 title.includes('bundle') || 
+                 title.includes('free class') || 
+                 title.includes('one class pass');
+        }
+        
+        switch(classType) {
+          case 'level1':
+            return title.includes('level 1');
+          case 'level2':
+            return title.includes('level 2');
+          case 'level3':
+            return title.includes('level 3');
+          case 'bodymovement':
+            return title.includes('body movement') && title.includes('open');
+          case 'shines':
+            return title.includes('shines');
+          case 'bundles':
+            return title.includes('bundle');
+          case 'free':
+            return title.includes('free class');
+          case 'oneclass':
+            return title.includes('one class pass');
+          default:
+            return false;
+        }
+      });
+      
+      // Only include order if it has matching items
+      if (filteredItems.length > 0) {
+        // Calculate the proportion of filtered items to total items
+        const filteredItemsValue = filteredItems.reduce((sum, item) => 
+          sum + parseFloat(item.price || 0) * (item.quantity || 1), 0
+        );
+        
+        const totalItemsValue = order.line_items.reduce((sum, item) => 
+          sum + parseFloat(item.price || 0) * (item.quantity || 1), 0
+        );
+        
+        // Calculate proportional discount
+        let filteredTotal = filteredItemsValue;
+        if (order.total_discounts && totalItemsValue > 0) {
+          const discountProportion = filteredItemsValue / totalItemsValue;
+          const proportionalDiscount = parseFloat(order.total_discounts || 0) * discountProportion;
+          filteredTotal = filteredItemsValue - proportionalDiscount;
+        }
+        
+        processedOrders.push({
+          ...order,
+          filtered_line_items: filteredItems,
+          filtered_total: filteredTotal,
+          items_display: filteredItems.map(item => {
+            const variant = item.variant_title || '';
+            return `${item.title} (${variant})`;
+          }).join(', '),
+          original_total: parseFloat(order.total_price || 0)
+        });
+      }
+    });
+    
+    return processedOrders;
   }
 
   // Income Report Functions
   async function generateIncomeReport() {
     setIncomeLoading(true);
-    const fromDate = document.getElementById('income-from-date').value;
     
-    if (!fromDate) {
-      showStatus('Please select a from date', false);
-      setIncomeLoading(false);
-      return;
-    }
-
-    const orders = await fetchShopifyOrders(fromDate);
-    
-    // Filter orders from the specified date
-    const filteredOrders = orders.filter(order => {
-      const orderDate = new Date(order.created_at);
-      return orderDate >= new Date(fromDate);
-    });
-
-    // Process orders for display
-    const reportData = filteredOrders.map(order => ({
-      orderNumber: order.order_number || order.name,
-      date: new Date(order.created_at).toLocaleDateString(),
-      customerId: order.customer?.id || 'N/A',
-      items: order.line_items.map(item => item.title).join(', '),
-      amount: parseFloat(order.total_price || 0),
-      status: order.financial_status || 'paid'
-    }));
-
-    // Calculate totals
-    const totalIncome = reportData.reduce((sum, order) => sum + order.amount, 0);
-
-    setIncomeReport({
-      data: reportData,
-      summary: {
-        totalOrders: reportData.length,
-        totalIncome
+    try {
+      if (!manualFromDate) {
+        showStatus('Please select a from date', false);
+        setIncomeLoading(false);
+        return;
       }
-    });
+      
+      const dateRange = getDateRange();
+      const orders = await fetchShopifyOrders(dateRange.from?.toISOString());
+      
+      // Apply date filter on order creation date
+      const filteredOrders = orders.filter(order => {
+        const orderDate = new Date(order.created_at);
+        return (!dateRange.from || orderDate >= dateRange.from) && 
+               (!dateRange.to || orderDate <= dateRange.to);
+      });
+      
+      const displayDateRange = {
+        from: dateRange.from?.toLocaleDateString() || 'Start',
+        to: dateRange.to?.toLocaleDateString() || 'Today'
+      };
 
-    setShowIncomeButtons(true);
-    setIncomeLoading(false);
-    showStatus(`Generated income report: ${reportData.length} orders`, true);
+      // Process orders for display
+      const reportData = filteredOrders.map(order => ({
+        orderNumber: order.order_number || order.name,
+        date: new Date(order.created_at).toLocaleDateString(),
+        customerId: order.customer?.id || 'N/A',
+        items: order.line_items.map(item => {
+          const variant = item.variant_title || '';
+          return `${item.title} (${variant})`;
+        }).join(', '),
+        amount: parseFloat(order.total_price || 0),
+        status: order.financial_status || 'paid'
+      }));
+
+      // Calculate totals
+      const totalIncome = reportData.reduce((sum, order) => sum + order.amount, 0);
+
+      setIncomeReport({
+        data: reportData,
+        summary: {
+          totalOrders: reportData.length,
+          totalIncome,
+          dateRange: displayDateRange
+        }
+      });
+
+      setShowIncomeButtons(true);
+      showStatus(`Generated income report: ${reportData.length} orders`, true);
+    } catch (error) {
+      console.error('Error generating income report:', error);
+      showStatus('Failed to generate income report', false);
+    } finally {
+      setIncomeLoading(false);
+    }
   }
 
   function resetIncomeReport() {
     setIncomeReport(null);
     setShowIncomeButtons(false);
-    document.getElementById('income-from-date').value = '2025-01-01';
+    setManualFromDate('');
+    setManualToDate('');
   }
 
-  // Term 2b Report Functions
-  async function generateTerm2bReport() {
-    setTerm2bLoading(true);
+  // Term Enrollments Report Functions
+  async function generateTermEnrollmentsReport() {
+    setTermEnrollmentsLoading(true);
     
-    // Fetch both orders and customers
-    const [orders, customers] = await Promise.all([
-      fetchShopifyOrders(),
-      fetchCustomers()
-    ]);
-
-    // Update global data
-    setGlobalData({
-      orders,
-      customers,
-      lastFetch: new Date()
-    });
-
-    // Process Term 2b enrollments
-    const enrollments = [];
-    const processedCustomers = new Set();
-
-    orders.forEach(order => {
-      const customerId = order.customer?.id;
-      if (!customerId) return;
-
-      order.line_items.forEach(item => {
-        const title = item.title.toLowerCase();
-        const variant = (item.variant_title || '').toLowerCase();
+    try {
+      // Fetch orders
+      const orders = await fetchShopifyOrders();
+      
+      // Structure to hold enrollment data
+      const enrollmentData = {};
+      const uniqueCustomers = new Set();
+      
+      // IMPORTANT: Bundle Logic
+      // - Platinum and Unlimited bundles span BOTH blocks
+      // - When filtering by Block A: Include bundles (students can attend Block A)
+      // - When filtering by Block B: Include bundles (students can attend Block B)
+      // - When filtering by Both Blocks: Include bundles once (not double-counted)
+      
+      orders.forEach(order => {
+        const customerId = order.customer?.id;
+        if (!customerId) return;
         
-        // Skip free classes and one class passes
-        if (title.includes('free class') || title.includes('one class pass')) return;
-        
-        // Check if it's a Term 2b class
-        if (!variant.includes('term 2b') && !variant.includes('term 2')) return;
-        
-        // Skip if not a valid term class
-        if (!variant.includes('term')) return;
-
-        // Extract class info
-        let classes = [];
-        let role = '';
-        
-        // Extract role
-        if (variant.includes('leader')) role = 'Leader';
-        else if (variant.includes('follower')) role = 'Follower';
-        
-        // Determine classes
-        if (title.includes('unlimited bundle') || title.includes('platinum bundle')) {
-          classes = ['Level 1', 'Level 2', 'Level 3', 'Body Movement', 'Shines'];
-        } else if (title.includes('level 1')) {
-          classes = ['Level 1'];
-        } else if (title.includes('level 2')) {
-          classes = ['Level 2'];
-        } else if (title.includes('level 3')) {
-          classes = ['Level 3'];
-        } else if (title.includes('body movement')) {
-          classes = ['Body Movement'];
-          role = 'N/A';
-        } else if (title.includes('shines')) {
-          classes = ['Shines'];
-          role = 'N/A';
+        // Skip orders with pending payment
+        if (order.financial_status === 'pending') {
+          console.log(`Skipping order ${order.order_number} - payment pending for customer ${customerId}`);
+          return;
         }
-
-        if (classes.length > 0) {
-          const customerInfo = customers[customerId] || {};
-          const customerName = customerInfo.first_name && customerInfo.last_name
-            ? `${customerInfo.first_name} ${customerInfo.last_name}`
-            : order.customer?.first_name && order.customer?.last_name
-            ? `${order.customer.first_name} ${order.customer.last_name}`
-            : 'Unknown';
-
-          enrollments.push({
-            customerId,
-            customerName,
-            email: customerInfo.email || order.customer?.email || '',
-            classes: classes.join(', '),
-            role: role || 'N/A',
-            orderDate: new Date(order.created_at).toLocaleDateString(),
-            amount: parseFloat(item.price || 0),
-            orderNumber: order.order_number || order.name
+        
+        order.line_items.forEach(item => {
+          const title = item.title.toLowerCase();
+          const variant = (item.variant_title || '').toLowerCase();
+          
+          // Skip free classes and one class passes for this report
+          if (title.includes('free class') || title.includes('one class pass')) return;
+          
+          // Extract term and block from variant
+          let itemTerm = null;
+          let itemBlock = null;
+          
+          const termMatch = variant.match(/term (\d+)([ab]?)/);
+          if (termMatch) {
+            itemTerm = termMatch[1];
+            itemBlock = termMatch[2] ? termMatch[2].toUpperCase() : null;
+            
+            // If no block specified, it's both blocks
+            if (!itemBlock && variant.includes(`term ${itemTerm}`) && 
+                !variant.includes(`term ${itemTerm}a`) && 
+                !variant.includes(`term ${itemTerm}b`)) {
+              itemBlock = 'both';
+            }
+          }
+          
+          // Skip if no term info
+          if (!itemTerm) return;
+          
+          // Apply term filter
+          if (enrollmentTermFilter !== 'all' && itemTerm !== enrollmentTermFilter) return;
+          
+          // Check if this is a bundle BEFORE applying block filter
+          const isBundle = title.includes('bundle');
+          
+          // Apply block filter - but bundles always pass because they span both blocks
+          if (!isBundle && enrollmentBlockFilter !== 'both') {
+            if (itemBlock !== enrollmentBlockFilter && itemBlock !== 'both') return;
+          }
+          
+          // When filter is "both", we want to include all blocks (A, B, and both)
+          // So no filtering needed when enrollmentBlockFilter === 'both'
+          
+          // Determine class type
+          let classType = null;
+          let role = '';
+          
+          if (title.includes('level 1')) {
+            classType = 'Level 1';
+          } else if (title.includes('level 2')) {
+            classType = 'Level 2';
+          } else if (title.includes('level 3')) {
+            classType = 'Level 3';
+          } else if (title.includes('body movement') && title.includes('open')) {
+            classType = 'Body Movement';
+            role = 'N/A';
+          } else if (title.includes('shines')) {
+            classType = 'Shines';
+            role = 'N/A';
+          } else if (title.includes('bundle')) {
+            classType = title.includes('platinum') ? 'Platinum Bundle' : 'Unlimited Bundle';
+            // Bundles include all classes
+            console.log(`Bundle detected: ${title}, variant: ${variant}`);
+          }
+          
+          if (!classType) return;
+          
+          // Apply class filter
+          if (enrollmentClassFilter !== 'all') {
+            if (enrollmentClassFilter === 'level1' && classType !== 'Level 1') return;
+            if (enrollmentClassFilter === 'level2' && classType !== 'Level 2') return;
+            if (enrollmentClassFilter === 'level3' && classType !== 'Level 3') return;
+            if (enrollmentClassFilter === 'bodymovement' && classType !== 'Body Movement') return;
+            if (enrollmentClassFilter === 'shines' && classType !== 'Shines') return;
+          }
+          
+          // Extract role for all classes (including bundles)
+          if (!role) {
+            if (variant.includes('leader')) role = 'Leader';
+            else if (variant.includes('follower')) role = 'Follower';
+          }
+          
+          // Create key for grouping
+          const termKey = enrollmentTermFilter === 'all' ? itemTerm : enrollmentTermFilter;
+          
+          // When filter is "both", we want to show data for both blocks separately
+          // When filter is specific (A or B), we only show that block
+          
+          // Determine which blocks to add this enrollment to
+          const blocksToAdd = [];
+          
+          if (enrollmentBlockFilter === 'both') {
+            // Show in appropriate blocks
+            if (isBundle) {
+              // Bundles ALWAYS appear in both blocks
+              blocksToAdd.push('A', 'B');
+            } else if (itemBlock === 'both') {
+              // Classes marked as "both" appear in both blocks
+              blocksToAdd.push('A', 'B');
+            } else if (itemBlock) {
+              // Regular classes appear in their specific block
+              blocksToAdd.push(itemBlock);
+            }
+          } else {
+            // Specific block filter - only show if it matches
+            if (isBundle || itemBlock === 'both' || itemBlock === enrollmentBlockFilter) {
+              blocksToAdd.push(enrollmentBlockFilter);
+            }
+          }
+          
+          // Add enrollment to each relevant block
+          blocksToAdd.forEach(block => {
+            const groupKey = `Term ${termKey} - Block ${block}`;
+            
+            if (!enrollmentData[groupKey]) {
+              enrollmentData[groupKey] = {};
+            }
+            
+            // Handle bundles specially - they get access to ALL classes
+            if (classType.includes('Bundle')) {
+              // Bundle students attend ALL classes
+              const bundleClasses = ['Level 1', 'Level 2', 'Level 3', 'Body Movement', 'Shines'];
+              
+              // Add this bundle student to each class they have access to
+              bundleClasses.forEach(bundleClass => {
+                if (!enrollmentData[groupKey][bundleClass]) {
+                  enrollmentData[groupKey][bundleClass] = {};
+                }
+                
+                // For Level classes, we need to track by role
+                if (bundleClass.includes('Level')) {
+                  if (!enrollmentData[groupKey][bundleClass][role]) {
+                    enrollmentData[groupKey][bundleClass][role] = new Set();
+                  }
+                  enrollmentData[groupKey][bundleClass][role].add(customerId);
+                } else {
+                  // Body Movement and Shines don't have roles
+                  if (!enrollmentData[groupKey][bundleClass].customers) {
+                    enrollmentData[groupKey][bundleClass] = { total: 0, customers: new Set() };
+                  }
+                  enrollmentData[groupKey][bundleClass].customers.add(customerId);
+                  enrollmentData[groupKey][bundleClass].total = enrollmentData[groupKey][bundleClass].customers.size;
+                }
+              });
+              
+              // Also track the bundle type itself for reporting
+              if (!enrollmentData[groupKey][classType]) {
+                enrollmentData[groupKey][classType] = { total: 0, customers: new Set() };
+              }
+              enrollmentData[groupKey][classType].customers.add(customerId);
+              enrollmentData[groupKey][classType].total = enrollmentData[groupKey][classType].customers.size;
+              
+              // Debug logging for bundles
+              console.log(`Bundle enrolled: ${classType} in ${groupKey}, Customer: ${customerId}, Role: ${role || 'No role'}`);
+              
+              // Add to unique customers
+              uniqueCustomers.add(customerId);
+            } else {
+              // Regular classes
+              if (!enrollmentData[groupKey][classType]) {
+                enrollmentData[groupKey][classType] = {};
+              }
+              
+              if (role === 'N/A') {
+                if (!enrollmentData[groupKey][classType].total) {
+                  enrollmentData[groupKey][classType] = { total: 0, customers: new Set() };
+                }
+                enrollmentData[groupKey][classType].customers.add(customerId);
+                enrollmentData[groupKey][classType].total = enrollmentData[groupKey][classType].customers.size;
+              } else if (role) {
+                if (!enrollmentData[groupKey][classType][role]) {
+                  enrollmentData[groupKey][classType][role] = new Set();
+                }
+                enrollmentData[groupKey][classType][role].add(customerId);
+              }
+              
+              // Add to unique customers
+              uniqueCustomers.add(customerId);
+            }
           });
-
-          processedCustomers.add(customerId);
+        });
+      });
+      
+      // Convert Sets to counts and format for display
+      const formattedData = {};
+      
+      // Sort term/block keys
+      const sortedTermBlocks = Object.keys(enrollmentData).sort((a, b) => {
+        // Extract term and block from keys like "Term 2 - Block A"
+        const parseKey = (key) => {
+          const termMatch = key.match(/Term (\d+)/);
+          const blockMatch = key.match(/Block ([AB])|Both Blocks/);
+          
+          const term = termMatch ? parseInt(termMatch[1]) : 0;
+          const block = blockMatch ? (blockMatch[1] || 'C') : 'C'; // C for "Both Blocks" to sort last
+          
+          return { term, block };
+        };
+        
+        const aData = parseKey(a);
+        const bData = parseKey(b);
+        
+        // Sort by term first
+        if (aData.term !== bData.term) {
+          return aData.term - bData.term;
+        }
+        
+        // Then by block (A < B < Both)
+        return aData.block.localeCompare(bData.block);
+      });
+      
+      // Define class order: Level classes first, then Body Movement/Shines, then Bundles
+      const classOrder = [
+        'Level 1', 'Level 2', 'Level 3', 
+        'Body Movement', 'Shines', 
+        'Platinum Bundle', 'Unlimited Bundle'
+      ];
+      
+      // Process each term/block in sorted order
+      sortedTermBlocks.forEach(termBlock => {
+        formattedData[termBlock] = {};
+        
+        // Sort classes within each term/block
+        const sortedClasses = Object.keys(enrollmentData[termBlock]).sort((a, b) => {
+          const aIndex = classOrder.indexOf(a);
+          const bIndex = classOrder.indexOf(b);
+          
+          // If both are in the order list, use that order
+          if (aIndex !== -1 && bIndex !== -1) {
+            return aIndex - bIndex;
+          }
+          
+          // If one is not in the list, put it at the end
+          if (aIndex === -1) return 1;
+          if (bIndex === -1) return -1;
+          
+          // Fallback to alphabetical
+          return a.localeCompare(b);
+        });
+        
+        // Process each class in sorted order
+        sortedClasses.forEach(className => {
+          // Skip bundle entries - they're already counted in the individual classes
+          if (className.includes('Bundle')) {
+            return;
+          }
+          
+          const data = enrollmentData[termBlock][className];
+          
+          if (data.total !== undefined) {
+            // Classes without roles
+            formattedData[termBlock][className] = {
+              total: data.total,
+              customers: data.customers,
+              display: `${data.total} students`
+            };
+          } else {
+            // Classes with roles
+            const leaders = data.Leader ? data.Leader.size : 0;
+            const followers = data.Follower ? data.Follower.size : 0;
+            // Check for students with no role (from bundles)
+            const noRole = data[''] ? data[''].size : 0;
+            const total = leaders + followers + noRole;
+            
+            formattedData[termBlock][className] = {
+              leaders,
+              followers,
+              total,
+              Leader: data.Leader,
+              Follower: data.Follower,
+              display: `${leaders} Leaders, ${followers} Followers (${total} total)`
+            };
+            
+            if (noRole > 0) {
+              console.warn(`${className} in ${termBlock} has ${noRole} students with no role (likely from bundles)`);
+            }
+            
+            // Debug: Log actual customer IDs for Level 1 Block B
+            if (className === 'Level 1' && termBlock.includes('Block B')) {
+              console.log(`\nDEBUG: ${className} in ${termBlock} customer IDs:`);
+              if (data.Leader) {
+                console.log(`Leaders (${data.Leader.size}):`, Array.from(data.Leader));
+              }
+              if (data.Follower) {
+                console.log(`Followers (${data.Follower.size}):`, Array.from(data.Follower));
+              }
+              if (data['']) {
+                console.log(`No role (${data[''].size}):`, Array.from(data['']));
+              }
+            }
+          }
+        });
+      });
+      
+      setTermEnrollmentsReport({
+        data: formattedData,
+        totalUniqueStudents: uniqueCustomers.size,
+        filters: {
+          class: enrollmentClassFilter,
+          term: enrollmentTermFilter,
+          block: enrollmentBlockFilter
         }
       });
-    });
-
-    setTerm2bReport({
-      data: {
-        enrollments,
-        uniqueStudents: processedCustomers.size
-      }
-    });
-
-    setShowTerm2bButtons(true);
-    setTerm2bLoading(false);
-    showStatus(`Found ${enrollments.length} Term 2b enrollments`, true);
+      
+      // Log summary for debugging
+      console.log('Term Enrollments Report Summary:');
+      console.log(`Filter - Term: ${enrollmentTermFilter}, Block: ${enrollmentBlockFilter}, Class: ${enrollmentClassFilter}`);
+      console.log(`Total unique students: ${uniqueCustomers.size}`);
+      
+      // Debug: Log raw enrollment data to check bundle distribution
+      console.log('\nRaw enrollment data:');
+      Object.entries(enrollmentData).forEach(([termBlock, classes]) => {
+        console.log(`\n${termBlock} (raw):`);
+        let blockUniqueStudents = new Set();
+        Object.entries(classes).forEach(([className, data]) => {
+          if (className === '_uniqueStudents') return;
+          
+          let classCount = 0;
+          if (data.total !== undefined) {
+            classCount = data.total;
+            if (data.customers) {
+              for (const id of data.customers) {
+                blockUniqueStudents.add(id);
+              }
+            }
+          } else {
+            const leaders = data.Leader ? data.Leader.size : 0;
+            const followers = data.Follower ? data.Follower.size : 0;
+            classCount = leaders + followers;
+            if (data.Leader) {
+              for (const id of data.Leader) {
+                blockUniqueStudents.add(id);
+              }
+            }
+            if (data.Follower) {
+              for (const id of data.Follower) {
+                blockUniqueStudents.add(id);
+              }
+            }
+          }
+          console.log(`  ${className}: ${classCount} students`);
+        });
+        console.log(`  Block unique total: ${blockUniqueStudents.size}`);
+      });
+      
+      console.log('\nFormatted data:');
+      Object.entries(formattedData).forEach(([termBlock, classes]) => {
+        console.log(`\n${termBlock}:`);
+        Object.entries(classes).forEach(([className, data]) => {
+          console.log(`  ${className}: ${data.display || data.total + ' students'}`);
+        });
+      });
+      
+      setShowTermEnrollmentsButtons(true);
+      setTermEnrollmentsLoading(false);
+      showStatus(`Generated enrollment report: ${uniqueCustomers.size} unique students`, true);
+    } catch (error) {
+      console.error('Error generating term enrollments report:', error);
+      showStatus('Failed to generate enrollment report', false);
+      setTermEnrollmentsLoading(false);
+    }
+  }
+  
+  function resetTermEnrollmentsReport() {
+    setTermEnrollmentsReport(null);
+    setShowTermEnrollmentsButtons(false);
+    setEnrollmentClassFilter('all');
+    setEnrollmentTermFilter('2');
+    setEnrollmentBlockFilter('both');
   }
 
-  function resetTerm2bReport() {
-    setTerm2bReport(null);
-    setShowTerm2bButtons(false);
+  // Social Attendees Report Functions
+  async function generateSocialAttendeesReport() {
+    setSocialAttendeesLoading(true);
+    showStatus('Fetching social attendees...', true);
+    
+    try {
+      const orders = await fetchShopifyOrders();
+      
+      // Fetch customer data from database
+      const customerMap = await fetchCustomers();
+      
+      // Debug: Log some orders to see the structure
+      console.log('DEBUG: Sample orders for social search:');
+      orders.slice(0, 5).forEach(order => {
+        order.line_items.forEach(item => {
+          if (item.title.toLowerCase().includes('social') || item.title.toLowerCase().includes('locomojo')) {
+            console.log('Found social item:', {
+              orderNumber: order.order_number,
+              title: item.title,
+              variant: item.variant_title,
+              quantity: item.quantity,
+              customer: order.customer
+            });
+          }
+        });
+      });
+      
+      // Filter orders that contain the social event
+      const socialOrders = [];
+      
+      orders.forEach((order, index) => {
+        let totalTickets = 0;
+        let hasSocialItem = false;
+        
+        order.line_items.forEach(item => {
+          // Check if this is the social event
+          if (item.title.toLowerCase().includes('locomojo first social') || 
+              (item.title.toLowerCase().includes('social') && item.title.toLowerCase().includes('june 14'))) {
+            hasSocialItem = true;
+            totalTickets += item.quantity || 1;
+          }
+        });
+        
+        if (hasSocialItem) {
+          // Debug log to see the full order structure
+          if (index < 5) { // Log first 5 orders for debugging
+            console.log(`DEBUG Social Order ${index + 1}:`, {
+              order_number: order.order_number,
+              name: order.name,
+              customer: order.customer,
+              customer_id: order.customer?.id,
+              has_customer: !!order.customer,
+              email: order.email,
+              contact_email: order.contact_email,
+              customer_email: order.customer?.email,
+              line_items: order.line_items.map(item => ({
+                title: item.title,
+                quantity: item.quantity
+              }))
+            });
+          }
+          
+          const customerId = order.customer?.id;
+          const dbCustomer = customerId ? customerMap[customerId] : null;
+          
+          socialOrders.push({
+            orderNumber: order.order_number || order.name,
+            customerId: customerId || 'No ID',
+            name: dbCustomer ? 
+              `${dbCustomer.first_name || ''} ${dbCustomer.last_name || ''}`.trim() : 
+              'Unknown',
+            email: dbCustomer?.email || order.customer?.email || order.email || order.contact_email || 'No email',
+            ticketCount: totalTickets,
+            status: order.financial_status
+          });
+        }
+      });
+      
+      setSocialAttendeesReport({
+        attendees: socialOrders,
+        summary: {
+          totalAttendees: socialOrders.length,
+          totalTickets: socialOrders.reduce((sum, order) => sum + order.ticketCount, 0)
+        }
+      });
+      
+      setShowSocialAttendeesButtons(true);
+      showStatus(`Found ${socialOrders.length} orders for the social event`, true);
+    } catch (error) {
+      console.error('Error generating social attendees report:', error);
+      showStatus('Failed to generate social attendees report', false);
+    } finally {
+      setSocialAttendeesLoading(false);
+    }
+  }
+  
+  function resetSocialAttendeesReport() {
+    setSocialAttendeesReport(null);
+    setShowSocialAttendeesButtons(false);
+  }
+
+  function exportSocialAttendeesToCSV() {
+    if (!socialAttendeesReport) return;
+    
+    const csv = [];
+    
+    // Headers
+    csv.push(['Social Attendees Report']);
+    csv.push([`LocoMojo First Social - June 14th`]);
+    csv.push([`Generated: ${new Date().toLocaleString()}`]);
+    csv.push([]);
+    csv.push(['Total Attendees:', socialAttendeesReport.summary.totalAttendees]);
+    csv.push(['Total Tickets:', socialAttendeesReport.summary.totalTickets]);
+    csv.push([]);
+    csv.push(['Order #', 'Customer ID', 'Name', 'Email', 'Tickets']);
+    
+    // Data rows
+    socialAttendeesReport.attendees.forEach(attendee => {
+      csv.push([
+        attendee.orderNumber,
+        attendee.customerId,
+        attendee.name,
+        attendee.email,
+        attendee.ticketCount
+      ]);
+    });
+    
+    // Convert to CSV string
+    const csvContent = csv.map(row => 
+      row.map(cell => {
+        // Escape quotes and wrap in quotes if contains comma
+        const cellStr = String(cell);
+        if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+          return `"${cellStr.replace(/"/g, '""')}"`;
+        }
+        return cellStr;
+      }).join(',')
+    ).join('\n');
+    
+    // Download
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `social_attendees_june14_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    showStatus('Social attendees report exported to CSV', true);
   }
 
   // Enrollment Timing Report Functions
@@ -424,19 +1135,15 @@ function Reports() {
           // Check if it's a term class
           if (!variant.includes('term')) return;
           
-          // Determine which term/block
-          let term = '';
+          // Determine which block (we only care about Term 2)
           let block = '';
           
           if (variant.includes('term 2b')) {
-            term = '2';
             block = 'b';
           } else if (variant.includes('term 2a')) {
-            term = '2';
             block = 'a';
           } else if (variant.includes('term 2') && !variant.includes('term 1') && !variant.includes('term 3')) {
             // "Term 2" without specific block = both blocks
-            term = '2';
             block = 'both';
           } else {
             // Skip other terms
@@ -820,33 +1527,47 @@ function Reports() {
       csv.push(['SUMMARY']);
       csv.push(['Total Orders', incomeReport.summary.totalOrders]);
       csv.push(['Total Income', `$${incomeReport.summary.totalIncome.toFixed(2)}`]);
+      csv.push(['Class Filter', incomeReport.summary.classFilter === 'all' ? 'All Classes' : incomeReport.summary.classFilter]);
+      csv.push(['Date Range', `${incomeReport.summary.dateRange.from} to ${incomeReport.summary.dateRange.to}`]);
+      if (incomeReport.summary.classFilter !== 'all' && incomeReport.summary.totalOriginalIncome) {
+        csv.push(['Original Total (before filtering)', `$${incomeReport.summary.totalOriginalIncome.toFixed(2)}`]);
+      }
       
-      filename = `income_report_${new Date().toISOString().split('T')[0]}.csv`;
+      const filterSuffix = incomeReport.summary.classFilter !== 'all' ? `_${incomeReport.summary.classFilter}` : '';
+      filename = `income_report${filterSuffix}_${new Date().toISOString().split('T')[0]}.csv`;
       
-    } else if (reportType === 'term2b' && term2bReport) {
+    } else if (reportType === 'termEnrollments' && termEnrollmentsReport) {
       // Headers
-      csv.push(['Customer Name', 'Email', 'Classes', 'Role', 'Order Date', 'Amount', 'Order #']);
+      csv.push(['Term Enrollments Report']);
+      csv.push([`Generated: ${new Date().toLocaleString()}`]);
+      csv.push([]);
+      csv.push(['Filters:', 
+        `Class: ${termEnrollmentsReport.filters.class === 'all' ? 'All Classes' : termEnrollmentsReport.filters.class}`,
+        `Term: ${termEnrollmentsReport.filters.term === 'all' ? 'All Terms' : 'Term ' + termEnrollmentsReport.filters.term}`,
+        `Block: ${termEnrollmentsReport.filters.block === 'both' ? 'Both Blocks' : 'Block ' + termEnrollmentsReport.filters.block}`
+      ]);
+      csv.push([]);
       
-      // Data rows
-      term2bReport.data.enrollments.forEach(row => {
-        csv.push([
-          row.customerName,
-          row.email,
-          `"${row.classes}"`,
-          row.role,
-          row.orderDate,
-          `$${row.amount.toFixed(2)}`,
-          row.orderNumber
-        ]);
+      // Data by term/block
+      Object.entries(termEnrollmentsReport.data).forEach(([termBlock, classes]) => {
+        csv.push([termBlock]);
+        csv.push(['Class', 'Details']);
+        
+        Object.entries(classes).forEach(([className, data]) => {
+          csv.push([className, data.display]);
+        });
+        
+        // Subtotal for this term/block
+        const subtotal = Object.values(classes).reduce((sum, data) => sum + data.total, 0);
+        csv.push(['Subtotal', `${subtotal} students`]);
+        csv.push([]);
       });
       
       // Summary
-      csv.push([]);
-      csv.push(['SUMMARY']);
-      csv.push(['Total Enrollments', term2bReport.data.enrollments.length]);
-      csv.push(['Unique Students', term2bReport.data.uniqueStudents]);
+      csv.push(['OVERALL SUMMARY']);
+      csv.push(['Total Unique Students', termEnrollmentsReport.totalUniqueStudents]);
       
-      filename = `term2b_enrollments_${new Date().toISOString().split('T')[0]}.csv`;
+      filename = `term_enrollments_${termEnrollmentsReport.filters.class}_term${termEnrollmentsReport.filters.term}_${new Date().toISOString().split('T')[0]}.csv`;
       
     } else if (reportType === 'timing' && timingReport) {
       // Headers
@@ -930,7 +1651,7 @@ function Reports() {
         });
       });
       
-      filename = `term2b_enrollment_analysis_${new Date().toISOString().split('T')[0]}.csv`;
+      filename = `enrollment_analysis_${new Date().toISOString().split('T')[0]}.csv`;
     }
     
     // Download CSV
@@ -946,11 +1667,13 @@ function Reports() {
     showStatus(`Exported ${filename}`, true);
   }
 
-  // Set default date on mount
+  // Set default values on mount
   useEffect(() => {
-    const dateInput = document.getElementById('income-from-date');
-    if (dateInput) {
-      dateInput.value = '2025-01-01';
+    // Load term settings from localStorage
+    const savedSettings = localStorage.getItem('termSettings');
+    if (savedSettings) {
+      const settings = JSON.parse(savedSettings);
+      setEnrollmentTermFilter(settings.term || '2');
     }
   }, []);
 
@@ -1028,88 +1751,138 @@ function Reports() {
         <h2 style={{
           fontSize: 'clamp(1.3rem, 3vw, 1.8rem)',
           fontWeight: '700',
-          marginBottom: '1.5rem',
+          marginBottom: '0.5rem',
           color: 'var(--accent-coral)'
         }}>
           Income Report
         </h2>
+        <p style={{ 
+          color: 'var(--text-secondary)', 
+          fontSize: '0.9rem',
+          marginBottom: '1rem'
+        }}>
+          Track total income for all orders within a date range.
+        </p>
         
+        {/* Date Selection */}
         <div style={{
           display: 'flex',
-          gap: '0.75rem',
-          marginBottom: '1.5rem',
-          alignItems: 'center',
-          flexWrap: 'wrap'
+          flexDirection: 'column',
+          gap: '1rem',
+          marginBottom: '1.5rem'
         }}>
-          <label style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>From Date:</label>
-          <input
-            type="date"
-            id="income-from-date"
-            style={{
-              padding: '0.5rem 1rem',
-              background: 'var(--glass-bg)',
-              border: '1px solid var(--glass-border)',
-              borderRadius: '6px',
-              color: 'var(--text-primary)',
-              fontSize: '0.9rem',
-              outline: 'none',
-              maxWidth: '200px'
-            }}
-          />
-          <button
-            onClick={generateIncomeReport}
-            disabled={incomeLoading}
-            style={{
-              padding: '0.5rem 1rem',
-              background: 'var(--accent-coral)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              fontWeight: '600',
-              cursor: incomeLoading ? 'not-allowed' : 'pointer',
-              opacity: incomeLoading ? 0.5 : 1,
-              transition: 'all 0.3s ease',
-              fontSize: '0.9rem'
-            }}
-          >
-            Generate Report
-          </button>
-          {showIncomeButtons && (
-            <>
-              <button
-                onClick={() => exportToCSV('income')}
-                style={{
-                  padding: '0.5rem 1rem',
-                  background: 'transparent',
-                  border: '1px solid var(--glass-border)',
-                  color: 'var(--text-primary)',
-                  borderRadius: '6px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  fontSize: '0.9rem'
-                }}
-              >
-                Export to CSV
-              </button>
-              <button
-                onClick={resetIncomeReport}
-                style={{
-                  padding: '0.5rem 1rem',
-                  background: 'transparent',
-                  border: '1px solid var(--glass-border)',
-                  color: 'var(--text-primary)',
-                  borderRadius: '6px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  fontSize: '0.9rem'
-                }}
-              >
-                Reset
-              </button>
-            </>
-          )}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '120px 1fr',
+            gap: '1rem',
+            alignItems: 'center'
+          }}>
+            <label style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: '600' }}>From:</label>
+            <input
+              type="date"
+              value={manualFromDate}
+              onChange={(e) => setManualFromDate(e.target.value)}
+              style={{
+                padding: '0.5rem 1rem',
+                background: 'var(--glass-bg)',
+                border: '1px solid var(--glass-border)',
+                borderRadius: '6px',
+                color: 'var(--text-primary)',
+                fontSize: '0.9rem',
+                outline: 'none',
+                width: '180px'
+              }}
+            />
+          </div>
+          
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '120px 1fr',
+            gap: '1rem',
+            alignItems: 'center'
+          }}>
+            <label style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: '600' }}>To:</label>
+            <input
+              type="date"
+              value={manualToDate}
+              onChange={(e) => setManualToDate(e.target.value)}
+              style={{
+                padding: '0.5rem 1rem',
+                background: 'var(--glass-bg)',
+                border: '1px solid var(--glass-border)',
+                borderRadius: '6px',
+                color: 'var(--text-primary)',
+                fontSize: '0.9rem',
+                outline: 'none',
+                width: '180px'
+              }}
+              placeholder="Optional"
+            />
+          </div>
+        </div>
+
+          {/* Action Buttons */}
+          <div style={{
+            display: 'flex',
+            gap: '0.75rem',
+            alignItems: 'center',
+            flexWrap: 'wrap'
+          }}>
+            <button
+              onClick={generateIncomeReport}
+              disabled={incomeLoading}
+              style={{
+                padding: '0.5rem 1rem',
+                background: 'var(--accent-coral)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontWeight: '600',
+                cursor: incomeLoading ? 'not-allowed' : 'pointer',
+                opacity: incomeLoading ? 0.5 : 1,
+                transition: 'all 0.3s ease',
+                fontSize: '0.9rem'
+              }}
+            >
+              Generate Report
+            </button>
+            {showIncomeButtons && (
+              <>
+                <button
+                  onClick={() => exportToCSV('income')}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    background: 'transparent',
+                    border: '1px solid var(--glass-border)',
+                    color: 'var(--text-primary)',
+                    borderRadius: '6px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  Export to CSV
+                </button>
+                <button
+                  onClick={resetIncomeReport}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    background: 'transparent',
+                    border: '1px solid var(--glass-border)',
+                    color: 'var(--text-primary)',
+                    borderRadius: '6px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  Reset
+                </button>
+              </>
+            )}
+          </div>
         </div>
         
         {incomeLoading && (
@@ -1217,30 +1990,40 @@ function Reports() {
               marginTop: '1.5rem',
               padding: '1rem',
               background: 'var(--glass-bg)',
-              borderRadius: '8px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '1rem'
+              borderRadius: '8px'
             }}>
-              <div>
-                <strong>Total Orders:</strong> {incomeReport.summary.totalOrders}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '1rem',
+                marginBottom: '1rem'
+              }}>
+                <div>
+                  <strong>Total Orders:</strong> {incomeReport.summary.totalOrders}
+                </div>
+                <div>
+                  <h3 style={{
+                    color: 'var(--success)',
+                    fontSize: '1.5rem'
+                  }}>
+                    Total Income: ${incomeReport.summary.totalIncome.toFixed(2)}
+                  </h3>
+                </div>
               </div>
-              <div>
-                <h3 style={{
-                  color: 'var(--success)',
-                  fontSize: '1.5rem'
-                }}>
-                  Total Income: ${incomeReport.summary.totalIncome.toFixed(2)}
-                </h3>
+              
+              <div style={{
+                fontSize: '0.9rem',
+                color: 'var(--text-secondary)'
+              }}>
+                <strong>Date Range:</strong> {incomeReport.summary.dateRange.from} to {incomeReport.summary.dateRange.to}
               </div>
             </div>
           </div>
         )}
-      </div>
 
-      {/* Term 2b Enrollments Report */}
+      {/* Term Enrollments Report */}
       <div style={{
         background: 'var(--glass-bg)',
         backdropFilter: 'blur(25px)',
@@ -1269,11 +2052,119 @@ function Reports() {
           marginBottom: '0.5rem',
           color: 'var(--accent-gold)'
         }}>
-          Term 2b Enrollments
+          Term Enrollments
         </h2>
         <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-          All Term 2b enrollments including Platinum/Unlimited bundles
+          View enrollment summary by term, block, and class type
         </p>
+        <p style={{ 
+          color: 'var(--text-secondary)', 
+          fontSize: '0.85rem', 
+          marginBottom: '1rem',
+          fontStyle: 'italic' 
+        }}>
+          Note: Bundle students (Platinum/Unlimited) are counted in ALL classes they have access to (Level 1-3, Body Movement, Shines)
+        </p>
+        
+        {/* Filters */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1rem',
+          marginBottom: '1.5rem'
+        }}>
+          {/* Class Type Selection */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '120px 1fr',
+            gap: '1rem',
+            alignItems: 'center'
+          }}>
+            <label style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: '600' }}>Class Type:</label>
+            <select
+              value={enrollmentClassFilter}
+              onChange={(e) => setEnrollmentClassFilter(e.target.value)}
+              style={{
+                padding: '0.75rem 1rem',
+                background: 'var(--glass-bg)',
+                border: '1px solid var(--glass-border)',
+                borderRadius: '10px',
+                color: 'var(--text-primary)',
+                fontSize: '0.95rem',
+                outline: 'none',
+                width: '250px',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="all" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>All Classes</option>
+              <option value="level1" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>Level 1</option>
+              <option value="level2" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>Level 2</option>
+              <option value="level3" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>Level 3</option>
+              <option value="bodymovement" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>Body Movement</option>
+              <option value="shines" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>Shines</option>
+            </select>
+          </div>
+
+          {/* Term Selection */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '120px 1fr',
+            gap: '1rem',
+            alignItems: 'center'
+          }}>
+            <label style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: '600' }}>Term:</label>
+            <select
+              value={enrollmentTermFilter}
+              onChange={(e) => setEnrollmentTermFilter(e.target.value)}
+              style={{
+                padding: '0.75rem 1rem',
+                background: 'var(--glass-bg)',
+                border: '1px solid var(--glass-border)',
+                borderRadius: '10px',
+                color: 'var(--text-primary)',
+                fontSize: '0.95rem',
+                outline: 'none',
+                width: '250px',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="all" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>All Terms</option>
+              <option value="1" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>Term 1</option>
+              <option value="2" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>Term 2</option>
+              <option value="3" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>Term 3</option>
+              <option value="4" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>Term 4</option>
+            </select>
+          </div>
+
+          {/* Block Selection */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '120px 1fr',
+            gap: '1rem',
+            alignItems: 'center'
+          }}>
+            <label style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: '600' }}>Block:</label>
+            <select
+              value={enrollmentBlockFilter}
+              onChange={(e) => setEnrollmentBlockFilter(e.target.value)}
+              style={{
+                padding: '0.75rem 1rem',
+                background: 'var(--glass-bg)',
+                border: '1px solid var(--glass-border)',
+                borderRadius: '10px',
+                color: 'var(--text-primary)',
+                fontSize: '0.95rem',
+                outline: 'none',
+                width: '250px',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="both" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>Both Blocks</option>
+              <option value="A" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>Block A</option>
+              <option value="B" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>Block B</option>
+            </select>
+          </div>
+        </div>
         
         <div style={{
           display: 'flex',
@@ -1283,8 +2174,8 @@ function Reports() {
           flexWrap: 'wrap'
         }}>
           <button
-            onClick={generateTerm2bReport}
-            disabled={term2bLoading}
+            onClick={generateTermEnrollmentsReport}
+            disabled={termEnrollmentsLoading}
             style={{
               padding: '0.5rem 1.5rem',
               background: 'var(--accent-gold)',
@@ -1292,17 +2183,17 @@ function Reports() {
               border: 'none',
               borderRadius: '6px',
               fontWeight: '600',
-              cursor: term2bLoading ? 'not-allowed' : 'pointer',
-              opacity: term2bLoading ? 0.5 : 1,
+              cursor: termEnrollmentsLoading ? 'not-allowed' : 'pointer',
+              opacity: termEnrollmentsLoading ? 0.5 : 1,
               transition: 'all 0.3s ease'
             }}
           >
             Generate Report
           </button>
-          {showTerm2bButtons && (
+          {showTermEnrollmentsButtons && (
             <>
               <button
-                onClick={() => exportToCSV('term2b')}
+                onClick={() => exportToCSV('termEnrollments')}
                 style={{
                   padding: '0.5rem 1.5rem',
                   background: 'transparent',
@@ -1317,7 +2208,7 @@ function Reports() {
                 Export to CSV
               </button>
               <button
-                onClick={resetTerm2bReport}
+                onClick={resetTermEnrollmentsReport}
                 style={{
                   padding: '0.5rem 1.5rem',
                   background: 'transparent',
@@ -1335,134 +2226,158 @@ function Reports() {
           )}
         </div>
         
-        {term2bLoading && (
+        {termEnrollmentsLoading && (
           <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
-            Loading data from Shopify and Supabase...
+            Loading enrollment data...
           </div>
         )}
         
-        {term2bReport && (
-          <div>
-            <div style={{ overflowX: 'auto', marginTop: '1rem' }}>
-            <table style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              minWidth: '600px'
-            }}>
-              <thead>
-                <tr>
-                  <th style={{
-                    padding: '0.75rem',
-                    textAlign: 'left',
-                    borderBottom: '1px solid var(--glass-border)',
-                    background: 'var(--glass-bg)',
-                    fontWeight: '600',
-                    color: 'var(--accent-gold)'
-                  }}>Customer Name</th>
-                  <th style={{
-                    padding: '0.75rem',
-                    textAlign: 'left',
-                    borderBottom: '1px solid var(--glass-border)',
-                    background: 'var(--glass-bg)',
-                    fontWeight: '600',
-                    color: 'var(--accent-gold)'
-                  }}>Email</th>
-                  <th style={{
-                    padding: '0.75rem',
-                    textAlign: 'left',
-                    borderBottom: '1px solid var(--glass-border)',
-                    background: 'var(--glass-bg)',
-                    fontWeight: '600',
-                    color: 'var(--accent-gold)'
-                  }}>Classes</th>
-                  <th style={{
-                    padding: '0.75rem',
-                    textAlign: 'left',
-                    borderBottom: '1px solid var(--glass-border)',
-                    background: 'var(--glass-bg)',
-                    fontWeight: '600',
-                    color: 'var(--accent-gold)'
-                  }}>Role</th>
-                  <th style={{
-                    padding: '0.75rem',
-                    textAlign: 'left',
-                    borderBottom: '1px solid var(--glass-border)',
-                    background: 'var(--glass-bg)',
-                    fontWeight: '600',
-                    color: 'var(--accent-gold)'
-                  }}>Order Date</th>
-                  <th style={{
-                    padding: '0.75rem',
-                    textAlign: 'left',
-                    borderBottom: '1px solid var(--glass-border)',
-                    background: 'var(--glass-bg)',
-                    fontWeight: '600',
-                    color: 'var(--accent-gold)'
-                  }}>Amount</th>
-                  <th style={{
-                    padding: '0.75rem',
-                    textAlign: 'left',
-                    borderBottom: '1px solid var(--glass-border)',
-                    background: 'var(--glass-bg)',
-                    fontWeight: '600',
-                    color: 'var(--accent-gold)'
-                  }}>Order #</th>
-                </tr>
-              </thead>
-              <tbody>
-                {term2bReport.data.enrollments.map((row, index) => (
-                  <tr key={index} style={{
-                    transition: 'background 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
+        {termEnrollmentsReport && (
+          <div style={{ marginTop: '1.5rem' }}>
+            {/* Object.entries maintains insertion order in modern JS */}
+            {Object.entries(termEnrollmentsReport.data).map(([termBlock, classes]) => (
+              <div key={termBlock} style={{
+                background: 'var(--glass-bg)',
+                borderRadius: '12px',
+                padding: '1.5rem',
+                marginBottom: '1.5rem',
+                border: '1px solid var(--glass-border)'
+              }}>
+                <h3 style={{
+                  fontSize: '1.2rem',
+                  fontWeight: '600',
+                  color: 'var(--accent-gold)',
+                  marginBottom: '1rem'
+                }}>
+                  {termBlock}
+                </h3>
+                
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.75rem'
+                }}>
+                  {Object.entries(classes).map(([className, data]) => (
+                    <div key={className} style={{
+                      display: 'grid',
+                      gridTemplateColumns: '200px 1fr',
+                      gap: '1rem',
+                      alignItems: 'center',
+                      padding: '0.75rem',
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(255, 255, 255, 0.05)'
+                    }}>
+                      <span style={{
+                        fontWeight: '600',
+                        color: 'var(--text-primary)'
+                      }}>
+                        {className}:
+                      </span>
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        {data.display}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Term/Block Summary */}
+                <div style={{
+                  marginTop: '1rem',
+                  paddingTop: '1rem',
+                  borderTop: '1px solid var(--glass-border)'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
                   }}>
-                    <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--glass-border)' }}>
-                      {row.customerName}
-                    </td>
-                    <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--glass-border)' }}>
-                      {row.email}
-                    </td>
-                    <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--glass-border)' }}>
-                      {row.classes}
-                    </td>
-                    <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--glass-border)' }}>
-                      {row.role}
-                    </td>
-                    <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--glass-border)' }}>
-                      {row.orderDate}
-                    </td>
-                    <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--glass-border)' }}>
-                      ${row.amount.toFixed(2)}
-                    </td>
-                    <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--glass-border)' }}>
-                      {row.orderNumber}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            </div>
-            
-            <div style={{
-              marginTop: '1.5rem',
-              padding: '1rem',
-              background: 'var(--glass-bg)',
-              borderRadius: '8px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '1rem'
-            }}>
-              <div>
-                <strong>Total Enrollments:</strong> {term2bReport.data.enrollments.length}
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                      Total Unique Students in {termBlock}:
+                    </span>
+                    <span style={{
+                      fontWeight: '600',
+                      color: 'var(--accent-coral)',
+                      fontSize: '1.1rem'
+                    }}>
+                      {(() => {
+                        // Count unique students (avoiding double-counting bundles)
+                        const uniqueStudents = new Set();
+                        Object.entries(classes).forEach(([className, data]) => {
+                          if (data.customers) {
+                            // data.customers is a Set, use for...of
+                            for (const id of data.customers) {
+                              uniqueStudents.add(id);
+                            }
+                          }
+                          if (data.Leader) {
+                            // data.Leader is a Set, use for...of
+                            for (const id of data.Leader) {
+                              uniqueStudents.add(id);
+                            }
+                          }
+                          if (data.Follower) {
+                            // data.Follower is a Set, use for...of
+                            for (const id of data.Follower) {
+                              uniqueStudents.add(id);
+                            }
+                          }
+                        });
+                        return uniqueStudents.size;
+                      })()}
+                    </span>
+                  </div>
+                  
+                </div>
               </div>
-              <div>
-                <strong>Unique Students:</strong> {term2bReport.data.uniqueStudents}
+            ))}
+            
+            {/* Overall Summary */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(232, 93, 47, 0.1) 0%, rgba(255, 111, 97, 0.1) 100%)',
+              borderRadius: '12px',
+              padding: '1.5rem',
+              border: '1px solid var(--accent-coral)',
+              marginTop: '2rem'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <h3 style={{
+                  fontSize: '1.3rem',
+                  fontWeight: '700',
+                  color: 'var(--accent-coral)'
+                }}>
+                  Total Unique Students:
+                </h3>
+                <span style={{
+                  fontSize: '2rem',
+                  fontWeight: '800',
+                  color: 'var(--accent-coral)'
+                }}>
+                  {termEnrollmentsReport.totalUniqueStudents}
+                </span>
+              </div>
+              
+              <div style={{
+                marginTop: '1rem',
+                fontSize: '0.9rem',
+                color: 'var(--text-secondary)'
+              }}>
+                <strong>Filters Applied:</strong>
+                <span style={{ marginLeft: '0.5rem' }}>
+                  Class: {termEnrollmentsReport.filters.class === 'all' ? 'All Classes' : 
+                    termEnrollmentsReport.filters.class === 'level1' ? 'Level 1' :
+                    termEnrollmentsReport.filters.class === 'level2' ? 'Level 2' :
+                    termEnrollmentsReport.filters.class === 'level3' ? 'Level 3' :
+                    termEnrollmentsReport.filters.class === 'bodymovement' ? 'Body Movement' :
+                    termEnrollmentsReport.filters.class === 'shines' ? 'Shines' :
+                    termEnrollmentsReport.filters.class === 'bundles' ? 'Bundles' : 'Unknown'},
+                  Term: {termEnrollmentsReport.filters.term === 'all' ? 'All Terms' : `Term ${termEnrollmentsReport.filters.term}`},
+                  Block: {termEnrollmentsReport.filters.block === 'both' ? 'Both Blocks' : `Block ${termEnrollmentsReport.filters.block}`}
+                </span>
               </div>
             </div>
           </div>
@@ -1945,6 +2860,193 @@ function Reports() {
                 </div>
               </details>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* Social Attendees Report */}
+      <div style={{
+        background: 'var(--glass-bg)',
+        backdropFilter: 'blur(25px)',
+        WebkitBackdropFilter: 'blur(25px)',
+        border: '1px solid var(--glass-border)',
+        borderRadius: '28px',
+        padding: '2rem',
+        marginBottom: '2rem',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '1.5rem'
+        }}>
+          <h2 style={{
+            fontSize: '1.5rem',
+            fontWeight: '700',
+            background: 'linear-gradient(135deg, var(--accent-coral) 0%, var(--accent-teal) 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
+          }}>
+            Social Attendees Report
+          </h2>
+          {!socialAttendeesReport && (
+            <button
+              onClick={generateSocialAttendeesReport}
+              disabled={socialAttendeesLoading}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: socialAttendeesLoading ? 'var(--glass-bg)' : 'linear-gradient(135deg, var(--accent-coral) 0%, var(--accent-teal) 100%)',
+                color: socialAttendeesLoading ? 'var(--text-secondary)' : 'white',
+                borderRadius: '8px',
+                fontWeight: '600',
+                cursor: socialAttendeesLoading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.3s ease',
+                border: socialAttendeesLoading ? '1px solid var(--glass-border)' : 'none',
+                opacity: socialAttendeesLoading ? 0.7 : 1
+              }}
+            >
+              {socialAttendeesLoading ? 'Generating...' : 'Generate Report'}
+            </button>
+          )}
+          {socialAttendeesReport && (
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button
+                onClick={exportSocialAttendeesToCSV}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  background: 'var(--success)',
+                  color: 'white',
+                  borderRadius: '8px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  border: 'none'
+                }}
+              >
+                Export to CSV
+              </button>
+              <button
+                onClick={resetSocialAttendeesReport}
+                style={{
+                  padding: '0.5rem 1.5rem',
+                  background: 'transparent',
+                  border: '1px solid var(--glass-border)',
+                  color: 'var(--text-primary)',
+                  borderRadius: '6px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                Reset
+              </button>
+            </div>
+          )}
+        </div>
+        
+        {socialAttendeesLoading && (
+          <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
+            Fetching social attendees from Shopify...
+          </div>
+        )}
+        
+        {socialAttendeesReport && (
+          <div>
+            <div style={{
+              marginBottom: '1rem',
+              padding: '1rem',
+              background: 'var(--glass-bg)',
+              borderRadius: '8px',
+              border: '1px solid var(--glass-border)'
+            }}>
+              <strong>Total Attendees: </strong>{socialAttendeesReport.summary.totalAttendees} |{' '}
+              <strong>Total Tickets: </strong>{socialAttendeesReport.summary.totalTickets}
+            </div>
+            
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                minWidth: '600px'
+              }}>
+                <thead>
+                  <tr>
+                    <th style={{
+                      padding: '0.75rem',
+                      textAlign: 'left',
+                      borderBottom: '1px solid var(--glass-border)',
+                      background: 'var(--glass-bg)',
+                      fontWeight: '600',
+                      color: 'var(--accent-coral)'
+                    }}>Order #</th>
+                    <th style={{
+                      padding: '0.75rem',
+                      textAlign: 'left',
+                      borderBottom: '1px solid var(--glass-border)',
+                      background: 'var(--glass-bg)',
+                      fontWeight: '600',
+                      color: 'var(--accent-coral)'
+                    }}>Customer ID</th>
+                    <th style={{
+                      padding: '0.75rem',
+                      textAlign: 'left',
+                      borderBottom: '1px solid var(--glass-border)',
+                      background: 'var(--glass-bg)',
+                      fontWeight: '600',
+                      color: 'var(--accent-coral)'
+                    }}>Name</th>
+                    <th style={{
+                      padding: '0.75rem',
+                      textAlign: 'left',
+                      borderBottom: '1px solid var(--glass-border)',
+                      background: 'var(--glass-bg)',
+                      fontWeight: '600',
+                      color: 'var(--accent-coral)'
+                    }}>Email</th>
+                    <th style={{
+                      padding: '0.75rem',
+                      textAlign: 'left',
+                      borderBottom: '1px solid var(--glass-border)',
+                      background: 'var(--glass-bg)',
+                      fontWeight: '600',
+                      color: 'var(--accent-coral)'
+                    }}>Tickets</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {socialAttendeesReport.attendees.map((attendee, index) => (
+                    <tr key={index} style={{
+                      transition: 'background 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                    }}>
+                      <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--glass-border)' }}>
+                        {attendee.orderNumber}
+                      </td>
+                      <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--glass-border)' }}>
+                        {attendee.customerId}
+                      </td>
+                      <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--glass-border)' }}>
+                        {attendee.name}
+                      </td>
+                      <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--glass-border)' }}>
+                        {attendee.email}
+                      </td>
+                      <td style={{ padding: '0.75rem', borderBottom: '1px solid var(--glass-border)' }}>
+                        {attendee.ticketCount}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

@@ -108,7 +108,7 @@ function Orders() {
       'September': '09', 'October': '10', 'November': '11', 'December': '12',
       // Short versions
       'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
-      'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+      'Jun': '06', 'Jul': '07', 'Aug': '08',
       'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
     };
     
@@ -303,10 +303,10 @@ function Orders() {
       const tableName = type === 'paid' ? 'paid_attendance' : 'free_attendance';
       setMessage(prev => prev + ` Updating ${type} attendance records...`);
       
-      // Filter orders by type AND payment status
+      // Filter orders by type AND payment status, and exclude orders without customer_id
       const ordersToProcess = type === 'paid' 
-        ? parsedOrders.filter(o => !o.hasOwnProperty('class_date') && o.paid === true)
-        : parsedOrders.filter(o => o.hasOwnProperty('class_date'));
+        ? parsedOrders.filter(o => !o.hasOwnProperty('class_date') && o.paid === true && o.customer_id)
+        : parsedOrders.filter(o => o.hasOwnProperty('class_date') && o.customer_id);
       
       if (ordersToProcess.length === 0) {
         console.log(`No ${type} orders to process for attendance`);
@@ -354,6 +354,11 @@ function Orders() {
             
             seenKeys.add(key);
             
+            // Debug: Log Level 1 Term 2 Block B enrollments
+            if (className === 'Level 1') {
+              console.log(`SYNC DEBUG: Adding Level 1 attendance - Customer: ${order.customer_id}, Role: ${order.role || 'No role'}`);
+            }
+            
             // Create new attendance record
             newAttendanceRecords.push({
               customer_id: order.customer_id,
@@ -394,6 +399,16 @@ function Orders() {
       if (newAttendanceRecords.length > 0) {
         console.log(`Inserting ${newAttendanceRecords.length} new ${type} attendance records`);
         
+        // Debug: Show all Level 1 customers being added
+        if (type === 'paid') {
+          const level1Records = newAttendanceRecords.filter(r => r.class_name === 'Level 1');
+          console.log(`\nSYNC DEBUG: Level 1 attendance records being inserted:`);
+          const level1Leaders = level1Records.filter(r => r.role === 'Leader').map(r => r.customer_id);
+          const level1Followers = level1Records.filter(r => r.role === 'Follower').map(r => r.customer_id);
+          console.log(`Leaders (${level1Leaders.length}):`, level1Leaders);
+          console.log(`Followers (${level1Followers.length}):`, level1Followers);
+        }
+        
         // Insert without upsert - we already filtered duplicates
         const { error: insertError } = await supabase
           .from(tableName)
@@ -412,6 +427,134 @@ function Orders() {
       }
     } catch (err) {
       console.error(`Error updating ${type} attendance:`, err);
+    }
+  }
+
+  // Process social event orders
+  async function processSocialOrders(shopifyOrders) {
+    try {
+      console.log('Processing social orders...');
+      
+      // Fetch customer data from database
+      const { data: customers, error: customerError } = await supabase
+        .from('customers')
+        .select('customer_id, first_name, last_name, email');
+      
+      if (customerError) {
+        console.error('Error fetching customers:', customerError);
+        return;
+      }
+      
+      // Create customer map
+      const customerMap = (customers || []).reduce((acc, customer) => {
+        acc[customer.customer_id] = customer;
+        return acc;
+      }, {});
+      
+      // Find social orders
+      const socialOrders = [];
+      
+      shopifyOrders.forEach(order => {
+        let totalTickets = 0;
+        let socialEventName = '';
+        let socialDate = null;
+        
+        order.line_items.forEach(item => {
+          const itemTitle = (item.title || '').toLowerCase();
+          
+          // Check if this is a social event
+          if (itemTitle.includes('locomojo first social') || 
+              (itemTitle.includes('social') && itemTitle.includes('june 14'))) {
+            totalTickets += item.quantity || 1;
+            socialEventName = 'LocoMojo First Social - June 14th';
+            socialDate = '2025-06-14'; // Hard-coded for now, can be made dynamic later
+          }
+        });
+        
+        if (totalTickets > 0 && order.financial_status === 'paid') {
+          const customerId = order.customer?.id;
+          const dbCustomer = customerId ? customerMap[customerId] : null;
+          
+          // Determine customer name
+          let customerName = 'Walk-in';
+          if (dbCustomer) {
+            customerName = `${dbCustomer.first_name || ''} ${dbCustomer.last_name || ''}`.trim();
+          } else if (order.customer) {
+            // Use Shopify customer details even without customer_id
+            const firstName = order.customer.first_name || '';
+            const lastName = order.customer.last_name || '';
+            if (firstName || lastName) {
+              customerName = `${firstName} ${lastName}`.trim();
+            }
+          }
+          
+          // If order has a note, check if it contains a name
+          if (customerName === 'Walk-in' && order.note) {
+            // Simple extraction: if the note starts with a name-like pattern
+            const nameMatch = order.note.match(/^([A-Z][a-z]+ ?[A-Z]?[a-z]*)/);
+            if (nameMatch) {
+              customerName = `${nameMatch[1]} (Walk-in)`;
+            }
+          }
+          
+          socialOrders.push({
+            order_id: order.id,
+            order_number: order.order_number || order.name,
+            customer_id: customerId || null,
+            customer_name: customerName,
+            customer_email: dbCustomer?.email || order.customer?.email || order.email || '',
+            social_date: socialDate,
+            social_name: socialEventName,
+            total_tickets: totalTickets,
+            tickets_used: 0,
+            special_guest: false
+          });
+        }
+      });
+      
+      if (socialOrders.length > 0) {
+        console.log(`Found ${socialOrders.length} social event orders`);
+        
+        // Get existing social attendance to avoid duplicates
+        const { data: existingAttendance, error: fetchError } = await supabase
+          .from('social_attendance')
+          .select('order_id, social_date');
+        
+        if (fetchError) {
+          console.error('Error fetching existing social attendance:', fetchError);
+          return;
+        }
+        
+        // Create a Set of existing combinations
+        const existingKeys = new Set(
+          (existingAttendance || []).map(a => `${a.order_id}-${a.social_date}`)
+        );
+        
+        // Filter out duplicates
+        const newSocialOrders = socialOrders.filter(order => 
+          !existingKeys.has(`${order.order_id}-${order.social_date}`)
+        );
+        
+        if (newSocialOrders.length > 0) {
+          console.log(`Inserting ${newSocialOrders.length} new social attendance records`);
+          
+          const { error: insertError } = await supabase
+            .from('social_attendance')
+            .insert(newSocialOrders);
+          
+          if (insertError) {
+            console.error('Error inserting social attendance:', insertError);
+          } else {
+            console.log('Social attendance records inserted successfully');
+          }
+        } else {
+          console.log('No new social attendance records to add');
+        }
+      } else {
+        console.log('No social event orders found');
+      }
+    } catch (err) {
+      console.error('Error processing social orders:', err);
     }
   }
 
@@ -510,6 +653,10 @@ function Orders() {
       setMessage(`Updating attendance records...`);
       await updateAttendanceFromOrders(allParsedOrders, 'paid');
       await updateAttendanceFromOrders(allParsedOrders, 'free');
+      
+      // Process social orders (including walk-ins without customer_id)
+      setMessage(`Processing social event orders...`);
+      await processSocialOrders(shopifyOrders);
       
       setMessage(`Successfully synced ${paidOrders.length} paid orders and ${freeOrders.length} free orders from Shopify!`);
       

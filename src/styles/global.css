@@ -101,6 +101,23 @@ body::before {
   position: sticky;
   top: 0;
   z-index: 100;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+  /* Prevent text selection while scrolling */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  /* Ensure smooth scrolling */
+  scroll-behavior: smooth;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.nav::-webkit-scrollbar {
+  display: none;
 }
 
 /* Navigation content wrapper */
@@ -111,6 +128,7 @@ body::before {
   align-items: center;
   justify-content: space-between;
   height: 85px;
+  min-width: max-content;
 }
 
 /* Logo styling */
@@ -128,6 +146,15 @@ body::before {
 .nav-links {
   display: flex;
   gap: 3rem;
+}
+
+/* Re-enable text selection for nav links */
+.nav-links a,
+.nav button {
+  -webkit-user-select: auto;
+  -moz-user-select: auto;
+  -ms-user-select: auto;
+  user-select: auto;
 }
 
 /* Individual navigation links */
@@ -545,11 +572,6 @@ body.kiosk-mode {
 
   .mobile-card {
     animation: fadeInRow 0.3s ease forwards;
-  }
-
-  /* Hide checkbox cells in mobile cards */
-  .mobile-card input[type="checkbox"] {
-    display: none;
   }
 
   /* Log page buttons responsive */

@@ -47,7 +47,7 @@ function NavBar() {
 
   return (
     <>
-      <nav className="navbar" style={{
+      <nav className="navbar nav" style={{
         backdropFilter: 'blur(30px)',
         WebkitBackdropFilter: 'blur(30px)',
         background: 'var(--glass-bg)',
@@ -55,15 +55,21 @@ function NavBar() {
         padding: '0 2rem',
         position: 'sticky',
         top: 0,
-        zIndex: 100
+        zIndex: 100,
+        overflowX: 'auto',
+        overflowY: 'hidden',
+        WebkitOverflowScrolling: 'touch',
+        scrollbarWidth: 'none',
+        msOverflowStyle: 'none'
       }}>
-        <div style={{
+        <div className="nav-content" style={{
           maxWidth: '1400px',
           margin: '0 auto',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          height: '85px'
+          height: '85px',
+          minWidth: 'max-content'
         }}>
           {/* Logo and Term Display */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>

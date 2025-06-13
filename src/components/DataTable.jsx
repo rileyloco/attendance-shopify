@@ -84,13 +84,17 @@ export default function DataTable({ headers, rows }) {
             WebkitBackdropFilter: 'blur(10px)'
           }}>
             {headers.map((header, idx) => {
-              // Skip empty cells or checkboxes
-              if (!row[idx] || typeof row[idx] !== 'string') return null;
+              // Skip empty cells
+              if (!row[idx]) return null;
+              
+              // Skip email on mobile for attendance tables
+              if (header === 'Email' && (headers.includes('W1') || headers.includes('Attended'))) return null;
               
               return (
                 <div key={idx} style={{
                   display: 'flex',
                   justifyContent: 'space-between',
+                  alignItems: 'center',
                   padding: '0.5rem 0',
                   borderBottom: idx < headers.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none'
                 }}>
@@ -99,14 +103,21 @@ export default function DataTable({ headers, rows }) {
                     fontSize: '0.875rem',
                     fontWeight: '600'
                   }}>{header}:</span>
-                  <span style={{
-                    color: 'var(--text-primary)',
-                    fontSize: '0.875rem',
-                    textAlign: 'right',
-                    maxWidth: '60%',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                  }}>{row[idx]}</span>
+                  {typeof row[idx] === 'string' ? (
+                    <span style={{
+                      color: 'var(--text-primary)',
+                      fontSize: '0.875rem',
+                      textAlign: 'right',
+                      maxWidth: '60%',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}>{row[idx]}</span>
+                  ) : (
+                    // Render checkboxes and other React elements
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      {row[idx]}
+                    </div>
+                  )}
                 </div>
               );
             })}
