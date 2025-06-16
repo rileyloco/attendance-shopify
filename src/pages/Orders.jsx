@@ -129,6 +129,7 @@ function Orders() {
     const allResults = [];
     let totalFreeOrders = 0;
     let filteredOutFreeOrders = 0;
+    let cancelledFreeOrders = 0;
     
     shopifyOrders.forEach(order => {
       const results = [];
@@ -136,12 +137,27 @@ function Orders() {
       const soloClasses = []; // Body Movement & Shines (no role)
       const freeClasses = []; // Free classes
       
+      // Skip cancelled orders for free classes
+      const isCancelled = order.cancelled_at || order.financial_status === 'voided' || order.financial_status === 'refunded';
+      
+      // Debug cancelled orders
+      if (isCancelled && order.line_items.some(item => item.title.toLowerCase().includes('free class'))) {
+        console.log(`DEBUG: Cancelled order detected - Order ${order.order_number}, Status: ${order.financial_status}, Cancelled at: ${order.cancelled_at}`);
+      }
+      
       order.line_items.forEach(item => {
         const title = item.title.toLowerCase();
         const variant = (item.variant_title || '').toLowerCase();
         
         // Check if it's a free class
         if (title.includes('free class')) {
+          // Skip if order is cancelled
+          if (isCancelled) {
+            cancelledFreeOrders++;
+            console.log(`Skipping cancelled free order ${order.id} for ${order.customer?.email || 'unknown customer'}`);
+            return;
+          }
+          
           // Extract role from variant
           let role = '';
           if (variant.includes('leader')) role = 'Leader';
@@ -151,7 +167,10 @@ function Orders() {
           const classDate = parseClassDate(item.variant_title);
           
           if (classDate) {
-            totalFreeOrders++;
+            // Only count non-cancelled orders
+            if (!isCancelled) {
+              totalFreeOrders++;
+            }
             
             // Check if the class date is within the last 2 weeks
             const today = new Date();
@@ -168,9 +187,29 @@ function Orders() {
                 class: 'Free Class - New York Salsa',
                 role: role,
                 paid: false,
-                notes: order.note || ''
+                notes: order.note || '',
+                total_spots: item.quantity || 1  // This is for attendance table, not orders table
               };
+              
+              // Debug logging for Aya
+              if (order.customer?.email?.includes('aya') || order.customer?.email?.includes('hatakeyama')) {
+                console.log('DEBUG: Free order for Aya:', {
+                  order_id: order.id,
+                  customer_id: order.customer?.id,
+                  email: order.customer?.email,
+                  class_date: classDate,
+                  role: role,
+                  quantity: item.quantity,
+                  total_spots: item.quantity || 1
+                });
+              }
+              
               freeClasses.push(freeOrder);
+              
+              // Debug logging for specific customer
+              if (order.customer?.email?.includes('aya') || order.customer?.first_name?.toLowerCase().includes('aya')) {
+                console.log(`DEBUG: Free order for Aya - Order ID: ${order.id}, Role: ${role}, Date: ${classDate}, Quantity: ${item.quantity || 1}`);
+              }
             } else {
               filteredOutFreeOrders++;
             }
@@ -271,8 +310,10 @@ function Orders() {
     // Log free orders statistics
     console.log(`Free Orders Stats:`);
     console.log(`1) Total free orders found: ${totalFreeOrders}`);
-    console.log(`2) Free orders filtered out (older than 2 weeks): ${filteredOutFreeOrders}`);
-    console.log(`3) Free orders to be inserted: ${totalFreeOrders - filteredOutFreeOrders}`);
+    console.log(`2) Cancelled free orders skipped: ${cancelledFreeOrders}`);
+    console.log(`3) Free orders filtered out (older than 2 weeks): ${filteredOutFreeOrders}`);
+    console.log(`4) Free orders to be inserted: ${totalFreeOrders - filteredOutFreeOrders - cancelledFreeOrders}`);
+    console.log(`5) Total free class items in result: ${allResults.filter(r => r.hasOwnProperty('class_date')).length}`);
     
     return allResults;
   }
@@ -304,7 +345,7 @@ function Orders() {
       setMessage(prev => prev + ` Updating ${type} attendance records...`);
       
       // Filter orders by type AND payment status, and exclude orders without customer_id
-      const ordersToProcess = type === 'paid' 
+      let ordersToProcess = type === 'paid' 
         ? parsedOrders.filter(o => !o.hasOwnProperty('class_date') && o.paid === true && o.customer_id)
         : parsedOrders.filter(o => o.hasOwnProperty('class_date') && o.customer_id);
       
@@ -316,7 +357,7 @@ function Orders() {
       // Get existing attendance records to avoid duplicates
       const { data: existingAttendance, error: fetchError } = await supabase
         .from(tableName)
-        .select(type === 'paid' ? 'customer_id, class_name, role' : 'customer_id, class_date, role');
+        .select(type === 'paid' ? 'customer_id, class_name, role' : 'customer_id, class_date, role, total_spots');
       
       if (fetchError) {
         console.error(`Error fetching existing ${type} attendance:`, fetchError);
@@ -325,7 +366,7 @@ function Orders() {
       
       console.log(`Found ${existingAttendance?.length || 0} existing ${type} attendance records`);
       
-      // Create a Set of existing combinations
+      // Create a Set of existing combinations and a Map for free attendance records
       const existingKeys = new Set(
         type === 'paid'
           ? existingAttendance.map(a => `${a.customer_id}-${a.class_name}-${a.role || ''}`)
@@ -335,11 +376,63 @@ function Orders() {
             })
       );
       
+      // For free attendance, also create a map to track existing records for updates
+      const existingFreeMap = new Map();
+      if (type === 'free') {
+        existingAttendance.forEach(a => {
+          const dateStr = typeof a.class_date === 'string' ? a.class_date : a.class_date.toISOString().split('T')[0];
+          const key = `${a.customer_id}-${dateStr}-${a.role || ''}`;
+          existingFreeMap.set(key, a);
+        });
+      }
+      
       console.log(`Existing keys for ${type} attendance:`, Array.from(existingKeys).slice(0, 10));
       
       // Prepare new attendance records
       const newAttendanceRecords = [];
+      const updateRecords = []; // Track records that need updates
       const seenKeys = new Set(); // Track keys we're about to insert
+      const aggregatedFreeOrders = new Map(); // Aggregate multiple free orders for same customer/role/date
+      
+      // For free orders, first aggregate multiple orders for same customer/role/date
+      if (type === 'free') {
+        console.log(`Aggregating ${ordersToProcess.length} free orders...`);
+        for (const order of ordersToProcess) {
+          const key = `${order.customer_id}-${order.class_date}-${order.role || ''}`;
+          
+          // Debug for Aya
+          if (key.includes('7670699163822')) { // Aya's customer ID if known
+            console.log(`DEBUG: Processing Aya's order in aggregation - Key: ${key}, Current spots: ${order.total_spots}`);
+          }
+          
+          if (aggregatedFreeOrders.has(key)) {
+            // Sum the quantities
+            const existing = aggregatedFreeOrders.get(key);
+            const oldSpots = existing.total_spots || 1;
+            const newSpots = order.total_spots || 1;
+            existing.total_spots = oldSpots + newSpots;
+            console.log(`Aggregating duplicate free order: ${key} - Adding ${newSpots} to ${oldSpots} = ${existing.total_spots}`);
+            
+            // Debug for Aya
+            if (key.includes('7670699163822')) {
+              console.log(`DEBUG: Aya's aggregated total is now ${existing.total_spots}`);
+            }
+          } else {
+            // Clone the order to avoid mutating original
+            aggregatedFreeOrders.set(key, { ...order });
+          }
+        }
+        // Replace ordersToProcess with aggregated orders
+        ordersToProcess = Array.from(aggregatedFreeOrders.values());
+        console.log(`After aggregation: ${ordersToProcess.length} unique free attendance records`);
+        
+        // Debug: Show all aggregated orders with quantities > 1
+        ordersToProcess.forEach(order => {
+          if (order.total_spots > 1) {
+            console.log(`DEBUG: Customer ${order.customer_id} has ${order.total_spots} spots for ${order.role || 'no role'} on ${order.class_date}`);
+          }
+        });
+      }
       
       for (const order of ordersToProcess) {
         if (type === 'paid') {
@@ -378,8 +471,30 @@ function Orders() {
           // Free attendance
           const key = `${order.customer_id}-${order.class_date}-${order.role || ''}`;
           
-          // Skip if this combination already exists in DB or in our batch
-          if (existingKeys.has(key) || seenKeys.has(key)) {
+          // Check if this record already exists
+          if (existingKeys.has(key)) {
+            // If it exists, we need to update the total_spots if it changed
+            const existingRecord = existingFreeMap.get(key);
+            if (existingRecord && existingRecord.total_spots !== order.total_spots) {
+              // Replace with new aggregated quantity, don't add
+              // (aggregation already summed multiple orders)
+              updateRecords.push({
+                customer_id: order.customer_id,
+                role: order.role || '',
+                class_date: order.class_date,
+                total_spots: order.total_spots || 1
+              });
+              
+              // Debug for Aya
+              if (order.customer_id === '7670699163822') {
+                console.log(`DEBUG: Updating Aya's existing record from ${existingRecord.total_spots} to ${order.total_spots}`);
+              }
+            }
+            continue;
+          }
+          
+          // Skip if we've already seen this key in our batch
+          if (seenKeys.has(key)) {
             continue;
           }
           
@@ -390,7 +505,8 @@ function Orders() {
             customer_id: order.customer_id,
             role: order.role || '',
             class_date: order.class_date,
-            attended: false
+            attended: false,
+            total_spots: order.total_spots || 1
           };
           newAttendanceRecords.push(newRecord);
         }
@@ -398,6 +514,14 @@ function Orders() {
       
       if (newAttendanceRecords.length > 0) {
         console.log(`Inserting ${newAttendanceRecords.length} new ${type} attendance records`);
+        
+        // Debug: Show free attendance records with quantities
+        if (type === 'free') {
+          console.log('DEBUG: Free attendance records being inserted:');
+          newAttendanceRecords.forEach(record => {
+            console.log(`  Customer ${record.customer_id}: ${record.total_spots} spots for ${record.role || 'no role'} on ${record.class_date}`);
+          });
+        }
         
         // Debug: Show all Level 1 customers being added
         if (type === 'paid') {
@@ -424,6 +548,32 @@ function Orders() {
       } else {
         console.log(`No new ${type} attendance records to add`);
         setMessage(prev => prev + ` ${type} attendance records are up to date.`);
+      }
+      
+      // Handle updates for free attendance
+      if (type === 'free' && updateRecords.length > 0) {
+        console.log(`Updating ${updateRecords.length} free attendance records with new quantities`);
+        
+        // Debug: Show what's being updated
+        console.log('DEBUG: Free attendance updates:');
+        updateRecords.forEach(update => {
+          console.log(`  Customer ${update.customer_id}: updating to ${update.total_spots} spots for ${update.role || 'no role'} on ${update.class_date}`);
+        });
+        
+        for (const update of updateRecords) {
+          const { error: updateError } = await supabase
+            .from('free_attendance')
+            .update({ total_spots: update.total_spots })
+            .eq('customer_id', update.customer_id)
+            .eq('class_date', update.class_date)
+            .eq('role', update.role || '');
+          
+          if (updateError) {
+            console.error('Error updating free attendance record:', updateError);
+          }
+        }
+        
+        setMessage(prev => prev + ` Updated ${updateRecords.length} free attendance quantities.`);
       }
     } catch (err) {
       console.error(`Error updating ${type} attendance:`, err);
@@ -471,7 +621,9 @@ function Orders() {
           }
         });
         
-        if (totalTickets > 0 && order.financial_status === 'paid') {
+        // Only process paid orders that are not cancelled
+        const isCancelled = order.cancelled_at || order.financial_status === 'voided' || order.financial_status === 'refunded';
+        if (totalTickets > 0 && order.financial_status === 'paid' && !isCancelled) {
           const customerId = order.customer?.id;
           const dbCustomer = customerId ? customerMap[customerId] : null;
           
@@ -636,10 +788,12 @@ function Orders() {
         if (deleteFreeError) {
           console.error('Error deleting free orders:', deleteFreeError);
         } else {
-          // Insert new free orders
+          // Insert new free orders (remove total_spots which is only for attendance table)
+          const ordersForInsert = freeOrders.map(({ total_spots, ...rest }) => rest);
+          
           const { error: insertFreeError } = await supabase
             .from('free_orders')
-            .insert(freeOrders);
+            .insert(ordersForInsert);
           
           if (insertFreeError) {
             console.error('Error inserting free orders:', insertFreeError);

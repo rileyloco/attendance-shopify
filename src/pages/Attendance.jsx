@@ -562,12 +562,22 @@ function Attendance() {
     }
   }
 
-  // Handle checkbox change for free attendance - optimistic update
-  async function handleFreeAttendanceChange(rowId, checked) {
+  // Handle free attendance checkbox toggle - optimistic update
+  async function handleFreeAttendanceChange(rowId, spotIndex, checked) {
+    // Find the current row
+    const currentRow = attendanceData.find(row => row.id === rowId);
+    if (!currentRow) return;
+
+    // Calculate new spots_used value
+    const currentSpots = currentRow.spots_used || 0;
+    const newSpotsUsed = checked 
+      ? currentSpots + 1
+      : currentSpots - 1;
+
     // Update local state immediately (optimistic update)
     setAttendanceData(prev =>
       prev.map(row =>
-        row.id === rowId ? { ...row, attended: checked } : row
+        row.id === rowId ? { ...row, spots_used: newSpotsUsed } : row
       )
     );
 
@@ -575,7 +585,7 @@ function Attendance() {
     try {
       const { error } = await supabase
         .from('free_attendance')
-        .update({ attended: checked })
+        .update({ spots_used: newSpotsUsed })
         .eq('id', rowId);
 
       if (error) {
@@ -583,7 +593,7 @@ function Attendance() {
         // Revert on error
         setAttendanceData(prev =>
           prev.map(row =>
-            row.id === rowId ? { ...row, attended: !checked } : row
+            row.id === rowId ? { ...row, spots_used: currentRow.spots_used || 0 } : row
           )
         );
         alert('Failed to update attendance');
@@ -593,7 +603,7 @@ function Attendance() {
       // Revert on error
       setAttendanceData(prev =>
         prev.map(row =>
-          row.id === rowId ? { ...row, attended: !checked } : row
+          row.id === rowId ? { ...row, spots_used: currentRow.spots_used || 0 } : row
         )
       );
       alert('Failed to update attendance');
@@ -1160,21 +1170,30 @@ function Attendance() {
     if (search.length >= 2) {
       // Search results view
       if (row.type === 'free') {
+        const totalSpots = row.total_spots || 1;
+        const spotsUsed = row.spots_used || 0;
+        const allUsed = spotsUsed >= totalSpots;
+        
         return [
           name || 'Unknown',
           row.displayClass,
           row.role || '-',
-          <input
-            key={`${row.id}-attended`}
-            type="checkbox"
-            checked={row.attended || false}
-            onChange={(e) => handleFreeAttendanceChange(row.id, e.target.checked)}
-            style={{
-              width: '22px',
-              height: '22px',
-              accentColor: 'var(--accent-warm)'
-            }}
-          />,
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {Array.from({ length: totalSpots }, (_, i) => (
+              <input
+                key={`${row.id}-spot-${i}`}
+                type="checkbox"
+                checked={i < spotsUsed}
+                onChange={(e) => handleFreeAttendanceChange(row.id, i, e.target.checked)}
+                style={{
+                  width: '20px',
+                  height: '20px',
+                  accentColor: 'var(--accent-warm)',
+                  cursor: 'pointer'
+                }}
+              />
+            ))}
+          </div>,
           '-'
         ];
       } else {
@@ -1203,20 +1222,29 @@ function Attendance() {
         ];
       }
     } else if (selectedClass === 'Free') {
+      const totalSpots = row.total_spots || 1;
+      const spotsUsed = row.spots_used || 0;
+      const allUsed = spotsUsed >= totalSpots;
+      
       return [
         name || 'Unknown',
         row.role || '-',
-        <input
-          key={`${row.id}-attended`}
-          type="checkbox"
-          checked={row.attended || false}
-          onChange={(e) => handleFreeAttendanceChange(row.id, e.target.checked)}
-          style={{
-            width: '22px',
-            height: '22px',
-            accentColor: 'var(--accent-warm)'
-          }}
-        />,
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {Array.from({ length: totalSpots }, (_, i) => (
+            <input
+              key={`${row.id}-spot-${i}`}
+              type="checkbox"
+              checked={i < spotsUsed}
+              onChange={(e) => handleFreeAttendanceChange(row.id, i, e.target.checked)}
+              style={{
+                width: '20px',
+                height: '20px',
+                accentColor: 'var(--accent-warm)',
+                cursor: 'pointer'
+              }}
+            />
+          ))}
+        </div>,
         '-'
       ];
     } else {
